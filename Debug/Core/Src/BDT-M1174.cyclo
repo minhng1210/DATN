@@ -1,0 +1,5 @@
+../Core/Src/BDT-M1174.c:27:13:Clear_RAM	2
+../Core/Src/BDT-M1174.c:35:13:Mapping_unit	1
+../Core/Src/BDT-M1174.c:40:13:Mapping_digit	4
+../Core/Src/BDT-M1174.c:73:13:Mapping_warning	2
+../Core/Src/BDT-M1174.c:95:6:Display_LCD	1
