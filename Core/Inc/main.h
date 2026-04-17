@@ -77,9 +77,7 @@ void Error_Handler(void);
 #define TDC_EN_GPIO_Port GPIOC
 #define AFE_EN_Pin GPIO_PIN_6
 #define AFE_EN_GPIO_Port GPIOC
-#define AFE_ERRB_Pin GPIO_PIN_7
-#define AFE_ERRB_GPIO_Port GPIOC
-#define AFE_RTS_Pin GPIO_PIN_8
+#define AFE_RTS_Pin GPIO_PIN_7
 #define AFE_RTS_GPIO_Port GPIOC
 #define OSC_EN_Pin GPIO_PIN_8
 #define OSC_EN_GPIO_Port GPIOA

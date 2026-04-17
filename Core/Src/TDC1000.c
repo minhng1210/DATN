@@ -8,7 +8,7 @@
 #include "TDC1000.h"
 
 #define READ 0 << 6
-#define WIRTE 1 << 6
+#define WRITE 1 << 6
 
 #define	MEAS_TOF_Mode 0x00
 #define	MEAS_Temp_Mode 0x40
@@ -41,27 +41,27 @@ void TDC1000_TOF_Config(TDC1000_Name* AFE, meas_TOF_type MEAS,
 	uint8_t tx[2];
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_RESET);
 
-	tx[0] = CONFIG_0 | WIRTE;
+	tx[0] = CONFIG_0 | WRITE;
 	tx[1] = 0x64 | (NUM_TX & 0x31); //1MHz
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
-	tx[0] = CONFIG_1 | WIRTE;
+	tx[0] = CONFIG_1 | WRITE;
 	tx[1] = NUM_RX & 0x07;
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
-	tx[0] = CONFIG_2 | WIRTE;
+	tx[0] = CONFIG_2 | WRITE;
 	tx[1] = MEAS_TOF_Mode | AFE->MODE_TOF;
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
-	tx[0] = CONFIG_4 | WIRTE;
+	tx[0] = CONFIG_4 | WRITE;
 	tx[1] = 0x40; //Receive Multi echo mode
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
-	tx[0] = TOF_0 | WIRTE;
+	tx[0] = TOF_0 | WRITE;
 	tx[1] = (uint8_t)(AFE->TIMING_REG);
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
-	tx[0] = TOF_1 | WIRTE;
+	tx[0] = TOF_1 | WRITE;
 	tx[1] = ((AFE->PGA_gain)/3 << 5) | (AFE->LNA_type) | ((AFE->TIMING_REG) >> 8);
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
@@ -73,7 +73,7 @@ void TDC1000_TOF_TXSelect(TDC1000_Name* AFE, Channel CHANNEL)
 	uint8_t tx[2];
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_RESET);
 
-	tx[0] = CONFIG_2 | WIRTE;
+	tx[0] = CONFIG_2 | WRITE;
 	tx[1] = MEAS_TOF_Mode | AFE->MODE_TOF | CHANNEL;
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
@@ -87,11 +87,11 @@ void TDC1000_Temp_Config(TDC1000_Name* AFE, meas_Temp_type MEAS)
 	uint8_t tx[2];
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_RESET);
 
-	tx[0] = CONFIG_2 | WIRTE;
+	tx[0] = CONFIG_2 | WRITE;
 	tx[1] = MEAS_Temp_Mode;
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
-	tx[0] = CONFIG_3 | WIRTE;
+	tx[0] = CONFIG_3 | WRITE;
 	tx[1] = AFE->MODE_TEMP;
 	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 

@@ -8,7 +8,7 @@
 #include "TDC7200.h"
 
 #define READ 0 << 6
-#define WIRTE 1 << 6
+#define WRITE 1 << 6
 
 #define CLOCKperiod 1/8000000
 #define CALIBRATION2_PERIODS 10
@@ -36,43 +36,43 @@ void TDC7200_Config(TDC7200_Name* TDC, meas_TOF_mode MEAS_MODE, uint8_t NUM_STOP
 	uint8_t tx[2];
 	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
 
-	tx[0] = CONFIG1 | WIRTE;
+	tx[0] = CONFIG1 | WRITE;
 	tx[1] = TDC->MEAS_MODE;
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
 
-	tx[0] = CONFIG2 | WIRTE;
+	tx[0] = CONFIG2 | WRITE;
 	tx[1] = 0x50 | (TDC->NUM_STOP - 1); //Calibration 2 periods = 10
 										//4 Measurement Cycles
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
 
-	tx[0] = INT_MASK | WIRTE;
+	tx[0] = INT_MASK | WRITE;
 	tx[1] = 0x01; // only enable New Measurement Interrupt
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
 
 	uint8_t high = (TDC->COARSE_CNTR_OVF >> 8) & 0xFF;
 	uint8_t low  = TDC->COARSE_CNTR_OVF & 0xFF;
-	tx[0] = COARSE_CNTR_OVF_H | WIRTE;
+	tx[0] = COARSE_CNTR_OVF_H | WRITE;
 	tx[1] = high;
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	tx[0] = COARSE_CNTR_OVF_L | WIRTE;
+	tx[0] = COARSE_CNTR_OVF_L | WRITE;
 	tx[1] = low;
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
 
 	high = (TDC->CLOCK_CNTR_OVF >> 8) & 0xFF;
 	low  = TDC->CLOCK_CNTR_OVF & 0xFF;
-	tx[0] = CLOCK_CNTR_OVF_H | WIRTE;
+	tx[0] = CLOCK_CNTR_OVF_H | WRITE;
 	tx[1] = high;
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	tx[0] = CLOCK_CNTR_OVF_L | WIRTE;
+	tx[0] = CLOCK_CNTR_OVF_L | WRITE;
 	tx[1] = low;
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
 
 	high = (TDC->CLOCK_CNTR_STOP_MASK >> 8) & 0xFF;
 	low  = TDC->CLOCK_CNTR_STOP_MASK & 0xFF;
-	tx[0] = CLOCK_CNTR_STOP_MASK_H | WIRTE;
+	tx[0] = CLOCK_CNTR_STOP_MASK_H | WRITE;
 	tx[1] = high;
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	tx[0] = CLOCK_CNTR_STOP_MASK_L | WIRTE;
+	tx[0] = CLOCK_CNTR_STOP_MASK_L | WRITE;
 	tx[1] = low;
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
 
@@ -94,7 +94,7 @@ void TDC7200_Startmeasing(TDC7200_Name* TDC)
 	uint8_t tx[2];
 	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
 
-	tx[0] = CONFIG1 | WIRTE;
+	tx[0] = CONFIG1 | WRITE;
 	tx[1] = TDC->MEAS_MODE | 0x01;
 	HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
 

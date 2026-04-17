@@ -1,3 +1,4 @@
+"./Core/Src/AT24C32.o"
 "./Core/Src/BC660K-GL.o"
 "./Core/Src/BDT-M1174.o"
 "./Core/Src/HT1621B.o"
