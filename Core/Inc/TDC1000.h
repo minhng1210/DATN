@@ -74,12 +74,12 @@ void TDC1000_Init(TDC1000_Name* AFE, SPI_HandleTypeDef* SPI,
 		GPIO_TypeDef* CS_PORT, uint16_t CS_PIN,
 		GPIO_TypeDef* EN_PORT, uint16_t EN_PIN,
 		GPIO_TypeDef* RST_PORT, uint16_t RST_PIN);
-void TDC1000_TOF_Config(TDC1000_Name* AFE, meas_TOF_type MEAS,
+HAL_StatusTypeDef TDC1000_TOF_Config(TDC1000_Name* AFE, meas_TOF_type MEAS,
 		uint8_t NUM_TX, uint8_t NUM_RX,
 		uint8_t PGA_gain, LNA_type LNA_type, uint16_t TIMING_REG);
-void TDC1000_TOF_TXConfig(TDC1000_Name* AFE, Channel CHANNEL, uint8_t NUM_TX);
-void TDC1000_TOF_RXConfig(TDC1000_Name* AFE, uint8_t NUM_RX);
-void TDC1000_Temp_Config(TDC1000_Name* AFE, meas_Temp_type MEAS);
+HAL_StatusTypeDef TDC1000_TOF_TXConfig(TDC1000_Name* AFE, Channel CHANNEL, uint8_t NUM_TX);
+HAL_StatusTypeDef TDC1000_TOF_RXConfig(TDC1000_Name* AFE, uint8_t NUM_RX);
+HAL_StatusTypeDef TDC1000_Temp_Config(TDC1000_Name* AFE, meas_Temp_type MEAS);
 void TDC1000_Active(TDC1000_Name* AFE);
 void TDC1000_Sleep(TDC1000_Name* AFE);
 void TDC1000_Reset(TDC1000_Name* AFE);

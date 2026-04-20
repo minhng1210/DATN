@@ -27,7 +27,7 @@ void TDC1000_Init(TDC1000_Name* AFE, SPI_HandleTypeDef* SPI,
 	AFE->RST_PIN = RST_PIN;
 }
 
-void TDC1000_TOF_Config(TDC1000_Name* AFE, meas_TOF_type MEAS,
+HAL_StatusTypeDef TDC1000_TOF_Config(TDC1000_Name* AFE, meas_TOF_type MEAS,
 		uint8_t NUM_TX, uint8_t NUM_RX,
 		uint8_t PGA_gain, LNA_type LNA_type, uint16_t TIMING_REG)
 {
@@ -38,64 +38,90 @@ void TDC1000_TOF_Config(TDC1000_Name* AFE, meas_TOF_type MEAS,
 	AFE->LNA_type = LNA_type;
 	AFE->TIMING_REG = TIMING_REG;
 
+	HAL_StatusTypeDef status;
+
 	uint8_t tx[2];
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_RESET);
 
 	tx[0] = CONFIG_0 | WRITE;
 	tx[1] = 0x64 | (NUM_TX & 0x31); //1MHz
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	if (status != HAL_OK) goto error;
 
 	tx[0] = CONFIG_1 | WRITE;
 	tx[1] = NUM_RX & 0x07;
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	if (status != HAL_OK) goto error;
 
 	tx[0] = CONFIG_2 | WRITE;
 	tx[1] = MEAS_TOF_Mode | AFE->MODE_TOF;
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	if (status != HAL_OK) goto error;
 
 	tx[0] = CONFIG_4 | WRITE;
 	tx[1] = 0x40; //Receive Multi echo mode
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	if (status != HAL_OK) goto error;
 
 	tx[0] = TOF_0 | WRITE;
 	tx[1] = (uint8_t)(AFE->TIMING_REG);
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	if (status != HAL_OK) goto error;
 
 	tx[0] = TOF_1 | WRITE;
 	tx[1] = ((AFE->PGA_gain)/3 << 5) | (AFE->LNA_type) | ((AFE->TIMING_REG) >> 8);
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	if (status != HAL_OK) goto error;
 
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_SET);
+	return HAL_OK;
+
+	error:
+		HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_SET);
+		return status;
 }
 
-void TDC1000_TOF_TXSelect(TDC1000_Name* AFE, Channel CHANNEL)
+HAL_StatusTypeDef TDC1000_TOF_TXSelect(TDC1000_Name* AFE, Channel CHANNEL)
 {
+	HAL_StatusTypeDef status;
+
 	uint8_t tx[2];
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_RESET);
 
 	tx[0] = CONFIG_2 | WRITE;
 	tx[1] = MEAS_TOF_Mode | AFE->MODE_TOF | CHANNEL;
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
 
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_SET);
+
+	return status;
 }
 
-void TDC1000_Temp_Config(TDC1000_Name* AFE, meas_Temp_type MEAS)
+HAL_StatusTypeDef TDC1000_Temp_Config(TDC1000_Name* AFE, meas_Temp_type MEAS)
 {
 	AFE->MODE_TEMP = MEAS;
+
+	HAL_StatusTypeDef status;
 
 	uint8_t tx[2];
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_RESET);
 
 	tx[0] = CONFIG_2 | WRITE;
 	tx[1] = MEAS_Temp_Mode;
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	if (status != HAL_OK) goto error;
 
 	tx[0] = CONFIG_3 | WRITE;
 	tx[1] = AFE->MODE_TEMP;
-	HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	status = HAL_SPI_Transmit(AFE->SPI, tx, 2, 100);
+	if (status != HAL_OK) goto error;
 
 	HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_SET);
+	return HAL_OK;
+
+	error:
+		HAL_GPIO_WritePin(AFE->CS_PORT, AFE->CS_PIN, GPIO_PIN_SET);
+		return status;
 }
 
 void TDC1000_Active(TDC1000_Name* AFE)

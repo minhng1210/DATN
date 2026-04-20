@@ -1,6 +1,6 @@
 ../Core/Src/TDC7200.c:16:6:TDC7200_Init	24	static
-../Core/Src/TDC7200.c:27:6:TDC7200_Config	24	static
-../Core/Src/TDC7200.c:82:6:TDC7200_Active	16	static
-../Core/Src/TDC7200.c:87:6:TDC7200_Sleep	16	static
-../Core/Src/TDC7200.c:92:6:TDC7200_Startmeasing	24	static
-../Core/Src/TDC7200.c:104:6:TDC7200_GetTOF	96	static
+../Core/Src/TDC7200.c:27:19:TDC7200_Config	24	static
+../Core/Src/TDC7200.c:102:6:TDC7200_Active	16	static
+../Core/Src/TDC7200.c:107:6:TDC7200_Sleep	16	static
+../Core/Src/TDC7200.c:112:19:TDC7200_Startmeasing	24	static
+../Core/Src/TDC7200.c:127:19:TDC7200_GetTOF	104	static

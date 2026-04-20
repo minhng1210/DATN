@@ -63,11 +63,11 @@ typedef struct
 void TDC7200_Init(TDC7200_Name* TDC, SPI_HandleTypeDef* SPI,
 		GPIO_TypeDef* CS_PORT, uint16_t CS_PIN,
 		GPIO_TypeDef* EN_PORT, uint16_t EN_PIN);
-void TDC7200_Config(TDC7200_Name* TDC, meas_TOF_mode MEAS_MODE, uint8_t NUM_STOP,
+HAL_StatusTypeDef TDC7200_Config(TDC7200_Name* TDC, meas_TOF_mode MEAS_MODE, uint8_t NUM_STOP,
 		uint16_t COARSE_CNTR_OVF, uint16_t CLOCK_CNTR_OVF, uint16_t CLOCK_CNTR_STOP_MASK);
 void TDC7200_Active(TDC7200_Name* TDC);
 void TDC7200_Sleep(TDC7200_Name* TDC);
-void TDC7200_Startmeasing(TDC7200_Name* TDC);
-void TDC7200_GetTOF(TDC7200_Name* TDC);
+HAL_StatusTypeDef TDC7200_Startmeasing(TDC7200_Name* TDC);
+HAL_StatusTypeDef TDC7200_GetTOF(TDC7200_Name* TDC);
 
 #endif /* INC_TDC7200_H_ */
