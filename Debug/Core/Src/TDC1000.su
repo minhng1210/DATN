@@ -1,7 +1,8 @@
 ../Core/Src/TDC1000.c:16:6:TDC1000_Init	24	static
 ../Core/Src/TDC1000.c:30:19:TDC1000_TOF_Config	24	static
-../Core/Src/TDC1000.c:84:19:TDC1000_TOF_TXSelect	24	static
-../Core/Src/TDC1000.c:100:19:TDC1000_Temp_Config	24	static
-../Core/Src/TDC1000.c:127:6:TDC1000_Active	16	static
-../Core/Src/TDC1000.c:132:6:TDC1000_Sleep	16	static
-../Core/Src/TDC1000.c:137:6:TDC1000_Reset	16	static
+../Core/Src/TDC1000.c:79:19:TDC1000_TOF_Select	24	static
+../Core/Src/TDC1000.c:95:19:TDC1000_Temp_Config	24	static
+../Core/Src/TDC1000.c:111:19:TDC1000_Temp_Select	24	static
+../Core/Src/TDC1000.c:125:6:TDC1000_Active	16	static
+../Core/Src/TDC1000.c:130:6:TDC1000_Sleep	16	static
+../Core/Src/TDC1000.c:135:6:TDC1000_Reset	16	static

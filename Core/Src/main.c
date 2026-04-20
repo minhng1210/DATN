@@ -21,6 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "math.h"
+
 #include "BC660K-GL.h"
 #include "HT1621B.h"
 #include "BDT-M1174.h"
@@ -80,11 +82,18 @@ TDC7200_Name TDC1;
 TDC1000_Name AFE1;
 BC660K_Name NB1;
 AT24C32_Name EPPROM1;
+
+uint8_t TDC_INT_flag = 0;
+float t_ab, t_ba;
+float temperature;
+float veclocity;
+
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == TDC_INT_Pin)
     {
     	TDC7200_GetTOF(&TDC1);
+    	TDC_INT_flag = 1;
     }
     if (GPIO_Pin == NB_INT_Pin)
     {
@@ -94,9 +103,55 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 void Meas_TOF()
 {
+	TDC7200_Active(&TDC1);
 	TDC7200_Config(&TDC1, MEAS_LONG_TOF, 1, 0xFFFF, 0xFFFF, 0x0000);
-	TDC1000_TOF_Config(&AFE1, MEAS_MODE0, 5, 1, 0, CAP_FEEDBACK, 0);
+
+	TDC1000_Active(&AFE1);
+	TDC1000_TOF_Config(&AFE1, MEAS_TOF_MODE0, 5, 1, 0, CAP_FEEDBACK, 0);
+
+	TDC1000_TOF_Select(&AFE1, CHANNEL1);
+	TDC7200_Startmeasing(&TDC1);
+	while (TDC_INT_flag == 0);
+	t_ab = TDC1.TOF[0];
+
+	TDC1000_TOF_Select(&AFE1, CHANNEL2);
+	TDC7200_Startmeasing(&TDC1);
+	while (TDC_INT_flag == 0);
+	t_ba = TDC1.TOF[0];
 }
+
+void Meas_Temp()
+{
+	TDC7200_Active(&TDC1);
+	TDC7200_Config(&TDC1, MEAS_LONG_TOF, 5, 0xFFFF, 0xFFFF, 0x0000);
+
+	TDC1000_Active(&AFE1);
+	TDC1000_Temp_Config(&AFE1, MEAS_Temp_Single_PT1000);
+	TDC1000_Temp_Select(&AFE1);
+
+	TDC7200_Startmeasing(&TDC1);
+
+	while (TDC_INT_flag == 0);
+	float t_REF = TDC1.TOF[0];
+	float t_RTD1 = TDC1.TOF[1];
+	float RTD1 = 1000 * t_REF / t_RTD1;
+	temperature = (RTD1/1000 - 1) * 0.00385f;
+}
+
+void Meas_Veclocity()
+{
+	Meas_TOF();
+	Meas_Temp();
+	float c = 1402.388
+			+ 5.03830 * temperature
+			- 5.81090E-2 * pow(temperature, 2)
+			+ 3.3432E-4 * pow(temperature, 3)
+			- 1.47797E-6 * pow(temperature, 4)
+			+ 3.1419E-9 * pow(temperature, 5);
+	veclocity = fabs(t_ab - t_ba) * pow(c, 2) / (2 * 0.058f);
+}
+
+
 /* USER CODE END 0 */
 
 /**
@@ -156,15 +211,21 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-
-  HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 1, RTC_WAKEUPCLOCK_CK_SPRE_16BITS);
   while (1)
   {
-
+	  Meas_Veclocity();
+	  float flow = veclocity * 3.14159265358979323846f * 0.015 * 0.015 /4;
+	  Display_LCD(&LCD1, flow, UNIT_FLOW);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_PWR_EnterSTANDBYMode();
+	  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+	  HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 9, RTC_WAKEUPCLOCK_CK_SPRE_16BITS);
+
+	  HAL_SuspendTick();
+	  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+	  SystemClock_Config();
+	  HAL_ResumeTick();
   }
   /* USER CODE END 3 */
 }
@@ -185,10 +246,17 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
+  /** Configure LSE Drive Capability
+  */
+  HAL_PWR_EnableBkUpAccess();
+  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
+
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_LSE
+                              |RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
@@ -212,6 +280,10 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
+  /** Enable MSI Auto calibration
+  */
+  HAL_RCCEx_EnableMSIPLLMode();
 }
 
 /**
@@ -488,8 +560,8 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 

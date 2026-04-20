@@ -57,7 +57,7 @@ typedef struct
 	uint32_t TIM[6];
 	uint32_t CLOCK_COUNT[5];
 	uint32_t CALIBRATION[2];
-	uint32_t TOF[5];
+	float TOF[5];
 }TDC7200_Name;
 
 void TDC7200_Init(TDC7200_Name* TDC, SPI_HandleTypeDef* SPI,
@@ -69,5 +69,6 @@ void TDC7200_Active(TDC7200_Name* TDC);
 void TDC7200_Sleep(TDC7200_Name* TDC);
 HAL_StatusTypeDef TDC7200_Startmeasing(TDC7200_Name* TDC);
 HAL_StatusTypeDef TDC7200_GetTOF(TDC7200_Name* TDC);
+
 
 #endif /* INC_TDC7200_H_ */

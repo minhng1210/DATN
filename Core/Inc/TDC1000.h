@@ -23,17 +23,17 @@
 
 typedef enum
 {
-	MEAS_MODE0 = 0x00,
-	MEAS_MODE1 = 0x01,
-	MEAS_MODE2 = 0x02,
+	MEAS_TOF_MODE0 = 0x00,
+	MEAS_TOF_MODE1 = 0x01,
+	MEAS_TOF_MODE2 = 0x02,
 }meas_TOF_type;
 
 typedef enum
 {
-	MEAS_Multi_PT1000 = 0x03,
-	MEAS_Multi_PT500 = 0x23,
-	MEAS_Single_PT1000 = 0x43,
-	MEAS_Single_PT500 = 0x63,
+	MEAS_Temp_Multi_PT1000 = 0x03,
+	MEAS_Temp_Multi_PT500 = 0x23,
+	MEAS_Temp_Single_PT1000 = 0x43,
+	MEAS_Temp_Single_PT500 = 0x63,
 }meas_Temp_type;
 
 typedef enum
@@ -77,9 +77,9 @@ void TDC1000_Init(TDC1000_Name* AFE, SPI_HandleTypeDef* SPI,
 HAL_StatusTypeDef TDC1000_TOF_Config(TDC1000_Name* AFE, meas_TOF_type MEAS,
 		uint8_t NUM_TX, uint8_t NUM_RX,
 		uint8_t PGA_gain, LNA_type LNA_type, uint16_t TIMING_REG);
-HAL_StatusTypeDef TDC1000_TOF_TXConfig(TDC1000_Name* AFE, Channel CHANNEL, uint8_t NUM_TX);
-HAL_StatusTypeDef TDC1000_TOF_RXConfig(TDC1000_Name* AFE, uint8_t NUM_RX);
+HAL_StatusTypeDef TDC1000_TOF_Select(TDC1000_Name* AFE, Channel CHANNEL);
 HAL_StatusTypeDef TDC1000_Temp_Config(TDC1000_Name* AFE, meas_Temp_type MEAS);
+HAL_StatusTypeDef TDC1000_Temp_Select(TDC1000_Name* AFE);
 void TDC1000_Active(TDC1000_Name* AFE);
 void TDC1000_Sleep(TDC1000_Name* AFE);
 void TDC1000_Reset(TDC1000_Name* AFE);

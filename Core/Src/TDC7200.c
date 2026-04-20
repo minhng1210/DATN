@@ -165,8 +165,8 @@ HAL_StatusTypeDef TDC7200_GetTOF(TDC7200_Name* TDC)
 	if (status != HAL_OK) goto error;
 	TDC->CALIBRATION[1] = ((uint32_t)rx[1] << 16) |((uint32_t)rx[2] << 8) |((uint32_t)rx[3]);
 
-	uint32_t calCount = (TDC->CALIBRATION[1] - TDC->CALIBRATION[0])/(CALIBRATION2_PERIODS - 1);
-	uint32_t normLSB = CLOCKperiod / calCount;
+	float calCount = (TDC->CALIBRATION[1] - TDC->CALIBRATION[0])/(CALIBRATION2_PERIODS - 1.0f);
+	float normLSB = CLOCKperiod / calCount;
 
 	if (TDC->MEAS_MODE == MEAS_SHORT_TOF)
 	{
