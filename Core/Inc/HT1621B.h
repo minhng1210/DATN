@@ -10,24 +10,24 @@
 
 #include "stm32l4xx_hal.h"
 
-#define HT1621B_SEND_COMMAND 0b100
-#define HT1621B_READ_DATA 0b110 //Read data from the RAM
-#define HT1621B_WRITE_DATA 0b101 //Write data to the RAM
+#define HT1621B_SEND_COMMAND	0b100
+#define HT1621B_READ_DATA		0b110 //Read data from the RAM
+#define HT1621B_WRITE_DATA		0b101 //Write data to the RAM
 
-#define SYS_DIS 0x00 //Turn off both system oscillator and LCD bias generator
-#define SYS_ON 0x01 //Turn on system oscillator
-#define LCD_OFF 0x02 //Turn off LCD bias generator
-#define LCD_ON 0x03 //Turn on LCD bias generator
+#define SYS_DIS					0x00 //Turn off both system oscillator and LCD bias generator
+#define SYS_ON					0x01 //Turn on system oscillator
+#define LCD_OFF					0x02 //Turn off LCD bias generator
+#define LCD_ON					0x03 //Turn on LCD bias generator
 
-#define TIMER_DIS 0x04 //Disable time base output
-#define WDT_DIS 0x05 //Disable WDT time-out flag output
-#define TIMER_EN 0x06 //Enable time base output
-#define WDT_EN 0x07 //Enable WDT time-out flag output
-#define TONE_OFF 0x08 //Turn off tone outputs
-#define TONE_ON 0x09 //Turn on tone outputs
+#define TIMER_DIS				0x04 //Disable time base output
+#define WDT_DIS					0x05 //Disable WDT time-out flag output
+#define TIMER_EN				0x06 //Enable time base output
+#define WDT_EN					0x07 //Enable WDT time-out flag output
+#define TONE_OFF				0x08 //Turn off tone outputs
+#define TONE_ON					0x09 //Turn on tone outputs
 
-#define CLR_TIMER 0x0C //Clear the contents of time base generator
-#define CLR_WDT 0x0E //Clear the contents of WDT stage
+#define CLR_TIMER				0x0C //Clear the contents of time base generator
+#define CLR_WDT					0x0E //Clear the contents of WDT stage
 
 typedef enum {
 	OSC_XTAL_32K = 0x14, //System clock source, crystal oscillator

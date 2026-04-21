@@ -7,11 +7,11 @@
 
 #include "TDC7200.h"
 
-#define READ 0 << 6
-#define WRITE 1 << 6
+#define READ	0 << 6
+#define WRITE	1 << 6
 
-#define CLOCKperiod 1/8000000
-#define CALIBRATION2_PERIODS 10
+#define CLOCKperiod				1/8000000
+#define CALIBRATION2_PERIODS	10
 
 void TDC7200_Init(TDC7200_Name* TDC, SPI_HandleTypeDef* SPI,
 		GPIO_TypeDef* CS_PORT, uint16_t CS_PIN,

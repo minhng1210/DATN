@@ -7,6 +7,9 @@
 
 #include <AT24C32.h>
 
+#define AT24C32_MAX_ADDR	0x0FFF
+#define AT24C32_PG_SIZE		32
+
 void AT24C32_Init(AT24C32_Name* EPPROM, I2C_HandleTypeDef* I2C, uint16_t ADDRESS)
 {
 	EPPROM->I2C = I2C;
@@ -24,8 +27,8 @@ HAL_StatusTypeDef AT24C32_Write(AT24C32_Name* EPPROM, uint16_t mem_addr, uint8_t
 
     while (bytes_written < size)
     {
-        uint16_t page_offset = current_addr % 32;
-        bytes_to_write = 32 - page_offset;
+        uint16_t page_offset = current_addr % AT24C32_PG_SIZE;
+        bytes_to_write = AT24C32_PG_SIZE - page_offset;
 
         if (bytes_to_write > (size - bytes_written))
             bytes_to_write = size - bytes_written;
@@ -40,7 +43,7 @@ HAL_StatusTypeDef AT24C32_Write(AT24C32_Name* EPPROM, uint16_t mem_addr, uint8_t
         HAL_Delay(5);
 
         bytes_written += bytes_to_write;
-        current_addr += bytes_to_write;
+        current_addr = (current_addr + bytes_to_write) & AT24C32_MAX_ADDR;
         current_data += bytes_to_write;
     }
 

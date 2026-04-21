@@ -7,11 +7,11 @@
 
 #include "TDC1000.h"
 
-#define READ 0 << 6
-#define WRITE 1 << 6
+#define READ	0 << 6
+#define WRITE	1 << 6
 
-#define	MEAS_TOF_Mode 0x00
-#define	MEAS_Temp_Mode 0x40
+#define	MEAS_TOF_Mode	0x00
+#define	MEAS_Temp_Mode	0x40
 
 void TDC1000_Init(TDC1000_Name* AFE, SPI_HandleTypeDef* SPI,
 		GPIO_TypeDef* CS_PORT, uint16_t CS_PIN,
