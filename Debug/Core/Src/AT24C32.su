@@ -1,3 +1,0 @@
-../Core/Src/AT24C32.c:13:6:AT24C32_Init	24	static
-../Core/Src/AT24C32.c:19:19:AT24C32_Write	56	static
-../Core/Src/AT24C32.c:53:19:AT24C32_Read	40	static

@@ -5,18 +5,18 @@
  *      Author: Admin
  */
 
-#include <AT24C32.h>
+#include <AT24C64.h>
 
-#define AT24C32_MAX_ADDR	0x0FFF
-#define AT24C32_PG_SIZE		32
+#define AT24C64_MAX_ADDR	0x1FFF
+#define AT24C64_PG_SIZE		32
 
-void AT24C32_Init(AT24C32_Name* EPPROM, I2C_HandleTypeDef* I2C, uint16_t ADDRESS)
+void AT24C64_Init(AT24C64_Name* EPPROM, I2C_HandleTypeDef* I2C, uint16_t ADDRESS)
 {
 	EPPROM->I2C = I2C;
 	EPPROM->ADDRESS = ADDRESS;
 }
 
-HAL_StatusTypeDef AT24C32_Write(AT24C32_Name* EPPROM, uint16_t mem_addr, uint8_t *pData, uint16_t size)
+HAL_StatusTypeDef AT24C64_Write(AT24C64_Name* EPPROM, uint16_t mem_addr, uint8_t *pData, uint16_t size)
 {
 	HAL_StatusTypeDef status;
 
@@ -27,8 +27,8 @@ HAL_StatusTypeDef AT24C32_Write(AT24C32_Name* EPPROM, uint16_t mem_addr, uint8_t
 
     while (bytes_written < size)
     {
-        uint16_t page_offset = current_addr % AT24C32_PG_SIZE;
-        bytes_to_write = AT24C32_PG_SIZE - page_offset;
+        uint16_t page_offset = current_addr % AT24C64_PG_SIZE;
+        bytes_to_write = AT24C64_PG_SIZE - page_offset;
 
         if (bytes_to_write > (size - bytes_written))
             bytes_to_write = size - bytes_written;
@@ -43,14 +43,14 @@ HAL_StatusTypeDef AT24C32_Write(AT24C32_Name* EPPROM, uint16_t mem_addr, uint8_t
         HAL_Delay(5);
 
         bytes_written += bytes_to_write;
-        current_addr = (current_addr + bytes_to_write) & AT24C32_MAX_ADDR;
+        current_addr = (current_addr + bytes_to_write) & AT24C64_MAX_ADDR;
         current_data += bytes_to_write;
     }
 
     return HAL_OK;
 }
 
-HAL_StatusTypeDef AT24C32_Read(AT24C32_Name* EPPROM, uint16_t mem_addr, uint8_t *pData, uint16_t size)
+HAL_StatusTypeDef AT24C64_Read(AT24C64_Name* EPPROM, uint16_t mem_addr, uint8_t *pData, uint16_t size)
 {
     return HAL_I2C_Mem_Read(EPPROM->I2C, EPPROM->ADDRESS, mem_addr,
                             I2C_MEMADD_SIZE_16BIT, pData, size, 100);

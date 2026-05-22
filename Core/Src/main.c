@@ -25,10 +25,10 @@
 
 #include "BC660K-GL.h"
 #include "HT1621B.h"
-#include "BDT-M1174.h"
 #include "TDC1000.h"
 #include "TDC7200.h"
-#include "AT24C32.h"
+#include "AT24C64.h"
+#include "RS485.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,7 +38,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define RX_BUFFER_SIZE 256
+uint8_t rxBuffer[RX_BUFFER_SIZE];
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,12 +52,13 @@ ADC_HandleTypeDef hadc1;
 
 I2C_HandleTypeDef hi2c2;
 
+UART_HandleTypeDef hlpuart1;
+UART_HandleTypeDef huart1;
+DMA_HandleTypeDef hdma_usart1_rx;
+
 RTC_HandleTypeDef hrtc;
 
 SPI_HandleTypeDef hspi1;
-
-UART_HandleTypeDef huart1;
-UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 
@@ -65,12 +67,13 @@ UART_HandleTypeDef huart3;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
-static void MX_USART3_UART_Init(void);
 static void MX_RTC_Init(void);
 static void MX_I2C2_Init(void);
+static void MX_LPUART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -81,7 +84,8 @@ HT1621B_Name LCD1;
 TDC7200_Name TDC1;
 TDC1000_Name AFE1;
 BC660K_Name NB1;
-AT24C32_Name EPPROM1;
+AT24C64_Name EPPROM1;
+RS485_HandleTypeDef RS485;
 
 uint8_t TDC_INT_flag = 0;
 float t_ab, t_ba;
@@ -101,39 +105,63 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     }
 }
 
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+{
+    if (huart->Instance == USART1)
+    {
+
+        HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rxBuffer, RX_BUFFER_SIZE);
+    }
+}
+
 void Meas_TOF()
 {
 	TDC7200_Active(&TDC1);
-	TDC7200_Config(&TDC1, MEAS_LONG_TOF, 1, 0xFFFF, 0xFFFF, 0x0000);
+	TDC7200_Config(&TDC1, 8000000,
+			FORECE_CALIBRATION_OFF, PARITY_DIS,
+			TRIG_EDGE_RISING, STOP_EDGE_RISING, START_EDGE_RISING,
+			MEAS_LONG_ToF,
+			CALIBRATION_20_CLOCK_PERIODS, AVERAGING_1_CYCLES, RECEIVE_ALL_PULSE,
+			CLOCK_CNTR_OVF_MASK_EN, COARSE_CNTR_OVF_MASK_EN, NEW_MEAS_MASK_EN,
+			0xff, 0xff, 0x00);
 
 	TDC1000_Active(&AFE1);
-	TDC1000_TOF_Config(&AFE1, MEAS_TOF_MODE0, 5, 1, 0, CAP_FEEDBACK, 0);
+	TDC1000_Config(&AFE1,
+			TX_FREQ_DIV_BY_8, 5,
+			MEASUREMENT_1_CYCLES, RECEIVE_ALL_PULSE,
+			DAMPING_DIS, TOF_MEAS_MODE0,
+			TEMP_MODE_2_CHANNEL, TEMP_RTD_SEL_PT1000, TEMP_CLK_DIV_BY_8,
+			BLANKING_DIS, ECHO_QUAL_THLD_125mV,
+			RECEIVE_MODE_SINGLE_ECHO, TRIG_EDGE_POLARITY_RISING, 31,
+			PGA_GAIN_0dB, PGA_CTRL_ACTIVE, LNA_CTRL_ACTIVE, LNA_FEEDBACK_CAP,
+			0x00,
+			FORCE_SHORT_TOF_DIS, SHORT_TOF_BLANK_PERIOD_64xT0,
+			ECHO_TIMEOUT_EN, TOF_TIMEOUT_CTRL_256xT0,
+			CLOCKIN_DIV_BY_1, AUTOZERO_PERIOD_64xT0);
 
-	TDC1000_TOF_Select(&AFE1, CHANNEL1);
+	TDC1000_ToF_Select(&AFE1, SELECT_CHANNEL1);
 	TDC7200_Startmeasing(&TDC1);
 	while (TDC_INT_flag == 0);
-	t_ab = TDC1.TOF[0];
+	t_ab = TDC1.ToF[0];
 
-	TDC1000_TOF_Select(&AFE1, CHANNEL2);
+	TDC1000_ToF_Select(&AFE1, SELECT_CHANNEL2);
 	TDC7200_Startmeasing(&TDC1);
 	while (TDC_INT_flag == 0);
-	t_ba = TDC1.TOF[0];
+	t_ba = TDC1.ToF[0];
 }
 
 void Meas_Temp()
 {
 	TDC7200_Active(&TDC1);
-	TDC7200_Config(&TDC1, MEAS_LONG_TOF, 5, 0xFFFF, 0xFFFF, 0x0000);
 
 	TDC1000_Active(&AFE1);
-	TDC1000_Temp_Config(&AFE1, MEAS_Temp_Single_PT1000);
 	TDC1000_Temp_Select(&AFE1);
 
 	TDC7200_Startmeasing(&TDC1);
 
 	while (TDC_INT_flag == 0);
-	float t_REF = TDC1.TOF[0];
-	float t_RTD1 = TDC1.TOF[1];
+	float t_REF = TDC1.ToF[0];
+	float t_RTD1 = TDC1.ToF[1];
 	float RTD1 = 1000 * t_REF / t_RTD1;
 	temperature = (RTD1/1000 - 1) * 0.00385f;
 }
@@ -183,14 +211,15 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
-  MX_USART3_UART_Init();
   MX_RTC_Init();
   MX_I2C2_Init();
+  MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HT1621_Init(&LCD1, OSC_RC_256K, BIAS_1p3_4COM,
+  HT1621_Init(&LCD1,
 		  LCD_CS_GPIO_Port, LCD_CS_Pin,
 		  LCD_RD_GPIO_Port, LCD_RD_Pin,
 		  LCD_WR_GPIO_Port, LCD_WR_Pin,
@@ -202,20 +231,21 @@ int main(void)
 		  AFE_CS_GPIO_Port, AFE_CS_Pin,
 		  AFE_EN_GPIO_Port, AFE_EN_Pin,
 		  AFE_RTS_GPIO_Port, AFE_RTS_Pin);
-  BC660K_Init(&NB1, &huart3,
+  BC660K_Init(&NB1, &hlpuart1,
 		  NB_PSM_GPIO_Port, NB_PSM_Pin,
 		  NB_RST_GPIO_Port, NB_RST_Pin);
-  AT24C32_Init(&EPPROM1, &hi2c2, 0xA0);
+  AT24C64_Init(&EPPROM1, &hi2c2, 0xA0);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rxBuffer, RX_BUFFER_SIZE);
   while (1)
   {
 	  Meas_Veclocity();
 	  float flow = veclocity * 3.14159265358979323846f * 0.015 * 0.015 /4;
-	  Display_LCD(&LCD1, flow, UNIT_FLOW);
+	  LCD1.value_in_litre = flow;
+	  HT1621B_BDTM1174_WirteData(&LCD1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -402,6 +432,75 @@ static void MX_I2C2_Init(void)
 }
 
 /**
+  * @brief LPUART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_LPUART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN LPUART1_Init 0 */
+
+  /* USER CODE END LPUART1_Init 0 */
+
+  /* USER CODE BEGIN LPUART1_Init 1 */
+
+  /* USER CODE END LPUART1_Init 1 */
+  hlpuart1.Instance = LPUART1;
+  hlpuart1.Init.BaudRate = 209700;
+  hlpuart1.Init.WordLength = UART_WORDLENGTH_7B;
+  hlpuart1.Init.StopBits = UART_STOPBITS_1;
+  hlpuart1.Init.Parity = UART_PARITY_NONE;
+  hlpuart1.Init.Mode = UART_MODE_TX_RX;
+  hlpuart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN LPUART1_Init 2 */
+
+  /* USER CODE END LPUART1_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * @brief RTC Initialization Function
   * @param None
   * @retval None
@@ -456,7 +555,7 @@ static void MX_SPI1_Init(void)
   hspi1.Instance = SPI1;
   hspi1.Init.Mode = SPI_MODE_MASTER;
   hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi1.Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
@@ -478,72 +577,18 @@ static void MX_SPI1_Init(void)
 }
 
 /**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
+  * Enable DMA controller clock
   */
-static void MX_USART1_UART_Init(void)
+static void MX_DMA_Init(void)
 {
 
-  /* USER CODE BEGIN USART1_Init 0 */
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
 
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_RS485Ex_Init(&huart1, UART_DE_POLARITY_HIGH, 0, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
-  * @brief USART3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART3_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART3_Init 0 */
-
-  /* USER CODE END USART3_Init 0 */
-
-  /* USER CODE BEGIN USART3_Init 1 */
-
-  /* USER CODE END USART3_Init 1 */
-  huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
-  huart3.Init.WordLength = UART_WORDLENGTH_8B;
-  huart3.Init.StopBits = UART_STOPBITS_1;
-  huart3.Init.Parity = UART_PARITY_NONE;
-  huart3.Init.Mode = UART_MODE_TX_RX;
-  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart3.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart3.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART3_Init 2 */
-
-  /* USER CODE END USART3_Init 2 */
+  /* DMA interrupt init */
+  /* DMA1_Channel5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 
 }
 
@@ -566,14 +611,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, NB_PSM_Pin|NB_RST_Pin|TDC_EN_Pin|AFE_EN_Pin
-                          |AFE_RTS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, NB_PSM_Pin|TDC_EN_Pin|AFE_EN_Pin|AFE_RTS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, AFE_CS_Pin|TDC_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOA, NB_RST_Pin|OSC_EN_Pin|UART1_DE_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(OSC_EN_GPIO_Port, OSC_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, AFE_CS_Pin|TDC_CS_Pin|UART1_RE_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LCD_DATA_Pin|LCD_WR_Pin|LCD_RD_Pin, GPIO_PIN_RESET);
@@ -581,27 +625,33 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 
-  /*Configure GPIO pins : NB_INT_Pin TDC_INT_Pin */
-  GPIO_InitStruct.Pin = NB_INT_Pin|TDC_INT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : NB_PSM_Pin NB_RST_Pin TDC_EN_Pin AFE_EN_Pin
-                           AFE_RTS_Pin */
-  GPIO_InitStruct.Pin = NB_PSM_Pin|NB_RST_Pin|TDC_EN_Pin|AFE_EN_Pin
-                          |AFE_RTS_Pin;
+  /*Configure GPIO pins : NB_PSM_Pin TDC_EN_Pin AFE_EN_Pin AFE_RTS_Pin */
+  GPIO_InitStruct.Pin = NB_PSM_Pin|TDC_EN_Pin|AFE_EN_Pin|AFE_RTS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : AFE_CS_Pin TDC_CS_Pin OSC_EN_Pin */
-  GPIO_InitStruct.Pin = AFE_CS_Pin|TDC_CS_Pin|OSC_EN_Pin;
+  /*Configure GPIO pin : NB_INT_Pin */
+  GPIO_InitStruct.Pin = NB_INT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(NB_INT_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : NB_RST_Pin AFE_CS_Pin TDC_CS_Pin OSC_EN_Pin
+                           UART1_RE_Pin UART1_DE_Pin */
+  GPIO_InitStruct.Pin = NB_RST_Pin|AFE_CS_Pin|TDC_CS_Pin|OSC_EN_Pin
+                          |UART1_RE_Pin|UART1_DE_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : TDC_INT_Pin */
+  GPIO_InitStruct.Pin = TDC_INT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(TDC_INT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LCD_DATA_Pin LCD_WR_Pin LCD_RD_Pin LCD_CS_Pin */
   GPIO_InitStruct.Pin = LCD_DATA_Pin|LCD_WR_Pin|LCD_RD_Pin|LCD_CS_Pin;
@@ -614,8 +664,8 @@ static void MX_GPIO_Init(void)
   __HAL_SYSCFG_FASTMODEPLUS_ENABLE(SYSCFG_FASTMODEPLUS_PB6);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+  HAL_NVIC_SetPriority(EXTI3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI3_IRQn);
 
   HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI4_IRQn);

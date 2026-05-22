@@ -6,12 +6,13 @@
  */
 
 #include "TDC7200.h"
+#include <stdio.h>
 
-#define READ	0 << 6
-#define WRITE	1 << 6
+#define AUTO_INCREMENT 	0x80
+#define READ			0x00
+#define WRITE			0x40
 
-#define CLOCKperiod				1/8000000
-#define CALIBRATION2_PERIODS	10
+#define START_MEAS 		0x01
 
 void TDC7200_Init(TDC7200_Name* TDC, SPI_HandleTypeDef* SPI,
 		GPIO_TypeDef* CS_PORT, uint16_t CS_PIN,
@@ -24,79 +25,144 @@ void TDC7200_Init(TDC7200_Name* TDC, SPI_HandleTypeDef* SPI,
 	TDC->EN_PIN = EN_PIN;
 }
 
-HAL_StatusTypeDef TDC7200_Config(TDC7200_Name* TDC, meas_TOF_mode MEAS_MODE, uint8_t NUM_STOP,
+static HAL_StatusTypeDef TDC7200_WriteRegister8bit(TDC7200_Name* TDC, uint8_t REG_ADD, uint8_t REG_VALUE)
+{
+	uint8_t tx[2];
+	tx[0] = REG_ADD | WRITE;
+	tx[1] = REG_VALUE;
+
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
+	HAL_StatusTypeDef status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 10);
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
+
+	return status;
+}
+
+static HAL_StatusTypeDef TDC7200_ReadRegister8bit(TDC7200_Name* TDC, uint8_t REG_ADD, uint8_t *REG_VALUE)
+{
+	uint8_t tx[2];
+	uint8_t rx[2];
+	tx[0] = REG_ADD | READ;
+	tx[1] = 0xFF;
+
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
+	HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(TDC->SPI, tx, rx, 2, 10);
+	*REG_VALUE = rx[1];
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
+
+	return status;
+}
+
+
+HAL_StatusTypeDef TDC7200_Config(TDC7200_Name* TDC, uint32_t CLOCK,
+		bit_toggle FORCE_CAL, bit_toggle PARITY,
+		edge_signal TRIG_EDGE, edge_signal STOP_EDGE, edge_signal START_EDGE,
+		meas_TOF_mode MEAS,
+		calibration_2_periods CALIBRATION, avg_cycles AVERAGING, num_stop RECEIVE,
+		interrupt_mask CLOCK_CNTR_OVF_MASK, interrupt_mask COARSE_CNTR_OVF_MASK, interrupt_mask NEW_MEAS_MASK,
 		uint16_t COARSE_CNTR_OVF, uint16_t CLOCK_CNTR_OVF, uint16_t CLOCK_CNTR_STOP_MASK)
 {
-	TDC->MEAS_MODE = MEAS_MODE;
-	TDC->NUM_STOP = NUM_STOP;
-	TDC->COARSE_CNTR_OVF = COARSE_CNTR_OVF;
-	TDC->CLOCK_CNTR_OVF = CLOCK_CNTR_OVF;
-	TDC->CLOCK_CNTR_STOP_MASK = CLOCK_CNTR_STOP_MASK;
+	TDC->CLOCK = CLOCK;
+	TDC->MEAS_MODE = MEAS;
+	TDC->CALIBRATION = CALIBRATION;
+	TDC->AVERAGING = AVERAGING;
 
 	HAL_StatusTypeDef status;
 
-	uint8_t tx[2];
+	uint8_t tx[11];
+	tx[0] = CONFIG1 | WRITE | AUTO_INCREMENT;
+	tx[1] = TDC->CONFIG1_NOW = FORCE_CAL | PARITY | TRIG_EDGE | START_EDGE | STOP_EDGE | MEAS;
+	tx[2] = CALIBRATION | AVERAGING | RECEIVE;
+	tx[3] = 0x00;
+	tx[4] = CLOCK_CNTR_OVF_MASK | COARSE_CNTR_OVF_MASK | NEW_MEAS_MASK;
+	tx[5] = (uint8_t)(COARSE_CNTR_OVF >> 8);
+	tx[6] = (uint8_t)(COARSE_CNTR_OVF);
+	tx[7] = (uint8_t)(CLOCK_CNTR_OVF >> 8);
+	tx[8] = (uint8_t)(CLOCK_CNTR_OVF);
+	tx[9] = (uint8_t)(CLOCK_CNTR_STOP_MASK >> 8);
+	tx[10] = (uint8_t)(CLOCK_CNTR_STOP_MASK);
+
 	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
-
-	tx[0] = CONFIG1 | WRITE;
-	tx[1] = TDC->MEAS_MODE;
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
-	tx[0] = CONFIG2 | WRITE;
-	tx[1] = 0x50 | (TDC->NUM_STOP - 1); //Calibration 2 periods = 10
-										//4 Measurement Cycles
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
-	tx[0] = INT_MASK | WRITE;
-	tx[1] = 0x01; // only enable New Measurement Interrupt
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
-	uint8_t high = (TDC->COARSE_CNTR_OVF >> 8) & 0xFF;
-	uint8_t low  = TDC->COARSE_CNTR_OVF & 0xFF;
-
-	tx[0] = COARSE_CNTR_OVF_H | WRITE;
-	tx[1] = high;
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
-	tx[0] = COARSE_CNTR_OVF_L | WRITE;
-	tx[1] = low;
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
-	high = (TDC->CLOCK_CNTR_OVF >> 8) & 0xFF;
-	low  = TDC->CLOCK_CNTR_OVF & 0xFF;
-	tx[0] = CLOCK_CNTR_OVF_H | WRITE;
-	tx[1] = high;
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
-	tx[0] = CLOCK_CNTR_OVF_L | WRITE;
-	tx[1] = low;
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
-	high = (TDC->CLOCK_CNTR_STOP_MASK >> 8) & 0xFF;
-	low  = TDC->CLOCK_CNTR_STOP_MASK & 0xFF;
-	tx[0] = CLOCK_CNTR_STOP_MASK_H | WRITE;
-	tx[1] = high;
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
-	tx[0] = CLOCK_CNTR_STOP_MASK_L | WRITE;
-	tx[1] = low;
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
-	if (status != HAL_OK) goto error;
-
+	status = HAL_SPI_Transmit(TDC->SPI, tx, 11, 10);
 	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
-	return HAL_OK;
+	return status;
+}
 
-	error:
-		HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
-		return status;
+HAL_StatusTypeDef TDC7200_ByteConfig(TDC7200_Name* TDC, uint8_t *config)
+{
+	TDC->CLOCK = ((uint32_t)config[0] << 24) | ((uint32_t)config[1] << 16) |
+			((uint32_t)config[2] << 8) | ((uint32_t)config[3]);
+
+	HAL_StatusTypeDef status;
+
+	uint8_t tx[11];
+	tx[0] = CONFIG1 | WRITE | AUTO_INCREMENT;
+	for (uint8_t i = 1; i <= 10; i++)
+		tx[i] = config[i + 3];
+
+	TDC->CONFIG1_NOW = tx[1];
+	TDC->MEAS_MODE = tx[1] & 0b00000110;
+	TDC->CALIBRATION = tx[2] & 0b11000000;
+	TDC->AVERAGING = tx[2] & 0b00111000;
+
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
+	status = HAL_SPI_Transmit(TDC->SPI, tx, 11, 10);
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
+	return status;
+}
+
+void TDC7200_Config_Clock(TDC7200_Name* TDC, uint32_t CLOCK)
+{
+	TDC->CLOCK = CLOCK;
+}
+
+HAL_StatusTypeDef TDC7200_Config_Parity(TDC7200_Name* TDC, bit_toggle PARITY)
+{
+	return TDC7200_WriteRegister8bit(TDC, CONFIG1, TDC->CONFIG1_NOW | PARITY);
+}
+
+HAL_StatusTypeDef TDC7200_Config_Edge(TDC7200_Name* TDC, edge_signal TRIG_EDGE, edge_signal STOP_EDGE, edge_signal START_EDGE)
+{
+	return TDC7200_WriteRegister8bit(TDC, CONFIG1, TDC->CONFIG1_NOW | TRIG_EDGE | STOP_EDGE | START_EDGE);
+}
+
+HAL_StatusTypeDef TDC7200_Config_Measmode(TDC7200_Name* TDC, meas_TOF_mode MEAS)
+{
+	return TDC7200_WriteRegister8bit(TDC, CONFIG1, TDC->CONFIG1_NOW | (TDC->MEAS_MODE = MEAS));
+}
+
+HAL_StatusTypeDef TDC7200_Config_Calibration(TDC7200_Name* TDC, calibration_2_periods CALIBRATION, avg_cycles AVERAGING)
+{
+	return TDC7200_WriteRegister8bit(TDC, CONFIG2, TDC->CONFIG2_NOW | (TDC->CALIBRATION = CALIBRATION) | (TDC->AVERAGING = AVERAGING));
+}
+
+HAL_StatusTypeDef TDC7200_Config_NumStop(TDC7200_Name* TDC, num_stop RECEIVE)
+{
+	return TDC7200_WriteRegister8bit(TDC, CONFIG2, TDC->CONFIG2_NOW | RECEIVE);
+}
+
+HAL_StatusTypeDef TDC7200_Config_InterruptMask(TDC7200_Name* TDC, interrupt_mask CLOCK_CNTR_OVF_MASK, interrupt_mask COARSE_CNTR_OVF_MASK, interrupt_mask NEW_MEAS_MASK)
+{
+	return TDC7200_WriteRegister8bit(TDC, INT_MASK, TDC->CONFIG2_NOW | CLOCK_CNTR_OVF_MASK | COARSE_CNTR_OVF_MASK | NEW_MEAS_MASK);
+}
+
+HAL_StatusTypeDef TDC7200_Config_CounterOverflow(TDC7200_Name* TDC, uint16_t COARSE_CNTR_OVF, uint16_t CLOCK_CNTR_OVF, uint16_t CLOCK_CNTR_STOP_MASK)
+{
+	HAL_StatusTypeDef status;
+
+	uint8_t tx[7];
+	tx[0] = COARSE_CNTR_OVF_H | WRITE | AUTO_INCREMENT;
+	tx[5] = (uint8_t)(COARSE_CNTR_OVF >> 8);
+	tx[6] = (uint8_t)(COARSE_CNTR_OVF);
+	tx[7] = (uint8_t)(CLOCK_CNTR_OVF >> 8);
+	tx[8] = (uint8_t)(CLOCK_CNTR_OVF);
+	tx[9] = (uint8_t)(CLOCK_CNTR_STOP_MASK >> 8);
+	tx[10] = (uint8_t)(CLOCK_CNTR_STOP_MASK);
+
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
+	status = HAL_SPI_Transmit(TDC->SPI, tx, 7, 10);
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
+	return status;
 }
 
 void TDC7200_Active(TDC7200_Name* TDC)
@@ -109,16 +175,43 @@ void TDC7200_Sleep(TDC7200_Name* TDC)
 	HAL_GPIO_WritePin(TDC->EN_PORT, TDC->EN_PIN, GPIO_PIN_RESET);
 }
 
+TDC7200_StatusTypeDef TDC7200_GetStatus(TDC7200_Name* TDC)
+{
+	TDC7200_StatusTypeDef status;
+
+	uint8_t reg_value;
+
+	TDC7200_ReadRegister8bit(TDC, INT_STATUS, &reg_value);
+
+	if ((reg_value & 0x04) != 0)
+	{
+		printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "CLOCK Counter Overflow error");
+		status = CLOCK_CNTR_OVF_INT;
+	}
+	if ((reg_value & 0x02) != 0)
+	{
+		printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "Coarse Counter Overflow error");
+		status = COARSE_CNTR_OVF_INT;
+	}
+	if ((reg_value & 0x01) != 0)
+	{
+		printf("[INFO] %s:%d: %s\r\n", __FILE__, __LINE__, "New Measurement has been completed");
+		status = NEW_MEAS_INT;
+	}
+	return status;
+}
+
 HAL_StatusTypeDef TDC7200_Startmeasing(TDC7200_Name* TDC)
 {
 	HAL_StatusTypeDef status;
-
 	uint8_t tx[2];
-	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
 
 	tx[0] = CONFIG1 | WRITE;
-	tx[1] = TDC->MEAS_MODE | 0x01;
-	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 100);
+	tx[1] = TDC->CONFIG1_NOW | 0x01;
+
+	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
+
+	status = HAL_SPI_Transmit(TDC->SPI, tx, 2, 10);
 
 	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
 	return status;
@@ -128,66 +221,68 @@ HAL_StatusTypeDef TDC7200_GetTOF(TDC7200_Name* TDC)
 {
 	HAL_StatusTypeDef status;
 
-	uint8_t tx[4] = {0};
-	uint8_t rx[4];
-	uint32_t tim_add[6] = {TIME1, TIME2, TIME3, TIME4, TIME5, TIME6};
-	uint32_t clock_count_add[5] = {CLOCK_COUNT1, CLOCK_COUNT2, CLOCK_COUNT3, CLOCK_COUNT4, CLOCK_COUNT5};
+	uint8_t tx[40] = {0};
+	uint8_t rx[40] = {0};
+	uint32_t tim_value[6];
+	uint32_t clock_count_value[5];
+	uint32_t calibration_1, calibration_2;
 
+	tx[0] = TIME1 | READ | AUTO_INCREMENT;
 	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_RESET);
 
-	//READ TIM
-	for (uint8_t i = 0; i < 6; i++)
-	{
-		tx[0] = tim_add[i] | READ;
-		status = HAL_SPI_TransmitReceive(TDC->SPI, tx, rx, 4, 100);
-		if (status != HAL_OK) goto error;
-		TDC->TIM[i] = ((uint32_t)rx[1] << 16) | ((uint32_t)rx[2] << 8) | ((uint32_t)rx[3]);
-	}
-
-	//READ CLOCK_COUNT
-	for (uint8_t i = 0; i < 5; i++)
-	{
-		tx[0] = clock_count_add[i] | READ;
-		status = HAL_SPI_TransmitReceive(TDC->SPI, tx, rx, 4, 100);
-		if (status != HAL_OK) goto error;
-		TDC->CLOCK_COUNT[i] = ((uint32_t)rx[1] << 16) | ((uint32_t)rx[2] << 8) | ((uint32_t)rx[3]);
-	}
-
-	//READ CALIBRATION1
-	tx[0] = CALIBRATION1 | READ;
-	status = HAL_SPI_TransmitReceive(TDC->SPI, tx, rx, 4, 100);
-	if (status != HAL_OK) goto error;
-	TDC->CALIBRATION[0] = ((uint32_t)rx[1] << 16) | ((uint32_t)rx[2] << 8) | ((uint32_t)rx[3]);
-
-	//READ CALIBRATION2
-	tx[0] = CALIBRATION2 | READ;
-	status = HAL_SPI_TransmitReceive(TDC->SPI, tx, rx, 4, 100);
-	if (status != HAL_OK) goto error;
-	TDC->CALIBRATION[1] = ((uint32_t)rx[1] << 16) |((uint32_t)rx[2] << 8) |((uint32_t)rx[3]);
-
-	float calCount = (TDC->CALIBRATION[1] - TDC->CALIBRATION[0])/(CALIBRATION2_PERIODS - 1.0f);
-	float normLSB = CLOCKperiod / calCount;
-
-	if (TDC->MEAS_MODE == MEAS_SHORT_TOF)
-	{
-		for (uint8_t i = 0; i < 5; i++)
-		{
-			TDC->TOF[i] = TDC->TIM[i] * normLSB;
-		}
-	}
-
-	if (TDC->MEAS_MODE == MEAS_LONG_TOF)
-	{
-		for (uint8_t i = 0; i < 5; i++)
-		{
-			TDC->TOF[i] = (TDC->TIM[0] - TDC->TIM[i+1]) * normLSB + TDC->CLOCK_COUNT[i] * CLOCKperiod;
-		}
-	}
+	status = HAL_SPI_TransmitReceive(TDC->SPI, tx, rx, 40, 10);
 
 	HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
-	return HAL_OK;
 
-	error:
-		HAL_GPIO_WritePin(TDC->CS_PORT, TDC->CS_PIN, GPIO_PIN_SET);
-		return status;
+	for (int i = 0; i < 13; i++)
+	{
+		int base = 1 + i * 3;
+		uint32_t data = ((uint32_t)rx[base] << 16) |
+				((uint32_t)rx[base + 1] << 8) |
+				((uint32_t)rx[base + 2]);
+		if (i == 11)
+			calibration_1 = data;
+		else if (i == 12)
+			calibration_2 = data;
+		else
+		{
+			if (i % 2 == 0)
+				tim_value[i/2] = data;
+			else
+				clock_count_value[i/2] = data;
+		}
+	}
+	uint8_t calibration2_period;
+	switch (TDC->CALIBRATION)
+	{
+		case CALIBRATION_2_CLOCK_PERIODS:
+			calibration2_period = 2;
+			break;
+		case CALIBRATION_10_CLOCK_PERIODS:
+			calibration2_period = 10;
+			break;
+		case CALIBRATION_20_CLOCK_PERIODS:
+			calibration2_period = 20;
+			break;
+		case CALIBRATION_40_CLOCK_PERIODS:
+			calibration2_period = 40;
+			break;
+	}
+
+	float CLOCKperiod = 1.0f / (TDC->CLOCK);
+	float calCount = (calibration_2 - calibration_1)/(calibration2_period - 1.0f);
+	float normLSB = CLOCKperiod / calCount;
+
+	if (TDC->MEAS_MODE == MEAS_SHORT_ToF)
+	{
+		for (uint8_t i = 0; i < 5; i++)
+			TDC->ToF[i] = tim_value[i] * normLSB;
+	}
+	if (TDC->MEAS_MODE == MEAS_LONG_ToF)
+	{
+		for (uint8_t i = 0; i < 5; i++)
+			TDC->ToF[i] = (tim_value[0] - tim_value[i+1]) * normLSB
+			+ (clock_count_value[i] >> TDC->AVERAGING ) * CLOCKperiod;
+	}
+	return status;
 }

@@ -1,3 +1,0 @@
-../Core/Src/AT24C32.c:13:6:AT24C32_Init	1
-../Core/Src/AT24C32.c:19:19:AT24C32_Write	4
-../Core/Src/AT24C32.c:53:19:AT24C32_Read	1

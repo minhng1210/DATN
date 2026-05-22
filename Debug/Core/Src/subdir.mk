@@ -5,10 +5,10 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../Core/Src/AT24C32.c \
+../Core/Src/AT24C64.c \
 ../Core/Src/BC660K-GL.c \
-../Core/Src/BDT-M1174.c \
 ../Core/Src/HT1621B.c \
+../Core/Src/RS485.c \
 ../Core/Src/TDC1000.c \
 ../Core/Src/TDC7200.c \
 ../Core/Src/main.c \
@@ -19,10 +19,10 @@ C_SRCS += \
 ../Core/Src/system_stm32l4xx.c 
 
 OBJS += \
-./Core/Src/AT24C32.o \
+./Core/Src/AT24C64.o \
 ./Core/Src/BC660K-GL.o \
-./Core/Src/BDT-M1174.o \
 ./Core/Src/HT1621B.o \
+./Core/Src/RS485.o \
 ./Core/Src/TDC1000.o \
 ./Core/Src/TDC7200.o \
 ./Core/Src/main.o \
@@ -33,10 +33,10 @@ OBJS += \
 ./Core/Src/system_stm32l4xx.o 
 
 C_DEPS += \
-./Core/Src/AT24C32.d \
+./Core/Src/AT24C64.d \
 ./Core/Src/BC660K-GL.d \
-./Core/Src/BDT-M1174.d \
 ./Core/Src/HT1621B.d \
+./Core/Src/RS485.d \
 ./Core/Src/TDC1000.d \
 ./Core/Src/TDC7200.d \
 ./Core/Src/main.d \
@@ -54,7 +54,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/AT24C32.cyclo ./Core/Src/AT24C32.d ./Core/Src/AT24C32.o ./Core/Src/AT24C32.su ./Core/Src/BC660K-GL.cyclo ./Core/Src/BC660K-GL.d ./Core/Src/BC660K-GL.o ./Core/Src/BC660K-GL.su ./Core/Src/BDT-M1174.cyclo ./Core/Src/BDT-M1174.d ./Core/Src/BDT-M1174.o ./Core/Src/BDT-M1174.su ./Core/Src/HT1621B.cyclo ./Core/Src/HT1621B.d ./Core/Src/HT1621B.o ./Core/Src/HT1621B.su ./Core/Src/TDC1000.cyclo ./Core/Src/TDC1000.d ./Core/Src/TDC1000.o ./Core/Src/TDC1000.su ./Core/Src/TDC7200.cyclo ./Core/Src/TDC7200.d ./Core/Src/TDC7200.o ./Core/Src/TDC7200.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/stm32l4xx_hal_msp.cyclo ./Core/Src/stm32l4xx_hal_msp.d ./Core/Src/stm32l4xx_hal_msp.o ./Core/Src/stm32l4xx_hal_msp.su ./Core/Src/stm32l4xx_it.cyclo ./Core/Src/stm32l4xx_it.d ./Core/Src/stm32l4xx_it.o ./Core/Src/stm32l4xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32l4xx.cyclo ./Core/Src/system_stm32l4xx.d ./Core/Src/system_stm32l4xx.o ./Core/Src/system_stm32l4xx.su
+	-$(RM) ./Core/Src/AT24C64.cyclo ./Core/Src/AT24C64.d ./Core/Src/AT24C64.o ./Core/Src/AT24C64.su ./Core/Src/BC660K-GL.cyclo ./Core/Src/BC660K-GL.d ./Core/Src/BC660K-GL.o ./Core/Src/BC660K-GL.su ./Core/Src/HT1621B.cyclo ./Core/Src/HT1621B.d ./Core/Src/HT1621B.o ./Core/Src/HT1621B.su ./Core/Src/RS485.cyclo ./Core/Src/RS485.d ./Core/Src/RS485.o ./Core/Src/RS485.su ./Core/Src/TDC1000.cyclo ./Core/Src/TDC1000.d ./Core/Src/TDC1000.o ./Core/Src/TDC1000.su ./Core/Src/TDC7200.cyclo ./Core/Src/TDC7200.d ./Core/Src/TDC7200.o ./Core/Src/TDC7200.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/stm32l4xx_hal_msp.cyclo ./Core/Src/stm32l4xx_hal_msp.d ./Core/Src/stm32l4xx_hal_msp.o ./Core/Src/stm32l4xx_hal_msp.su ./Core/Src/stm32l4xx_it.cyclo ./Core/Src/stm32l4xx_it.d ./Core/Src/stm32l4xx_it.o ./Core/Src/stm32l4xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32l4xx.cyclo ./Core/Src/system_stm32l4xx.d ./Core/Src/system_stm32l4xx.o ./Core/Src/system_stm32l4xx.su
 
 .PHONY: clean-Core-2f-Src
 

@@ -57,15 +57,15 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define NB_INT_Pin GPIO_PIN_1
-#define NB_INT_GPIO_Port GPIOC
-#define NB_INT_EXTI_IRQn EXTI1_IRQn
 #define NB_PSM_Pin GPIO_PIN_2
 #define NB_PSM_GPIO_Port GPIOC
-#define NB_RST_Pin GPIO_PIN_3
-#define NB_RST_GPIO_Port GPIOC
+#define NB_INT_Pin GPIO_PIN_3
+#define NB_INT_GPIO_Port GPIOC
+#define NB_INT_EXTI_IRQn EXTI3_IRQn
 #define BAT_CHECK_Pin GPIO_PIN_0
 #define BAT_CHECK_GPIO_Port GPIOA
+#define NB_RST_Pin GPIO_PIN_2
+#define NB_RST_GPIO_Port GPIOA
 #define AFE_CS_Pin GPIO_PIN_4
 #define AFE_CS_GPIO_Port GPIOA
 #define TDC_CS_Pin GPIO_PIN_5
@@ -81,6 +81,10 @@ void Error_Handler(void);
 #define AFE_RTS_GPIO_Port GPIOC
 #define OSC_EN_Pin GPIO_PIN_8
 #define OSC_EN_GPIO_Port GPIOA
+#define UART1_RE_Pin GPIO_PIN_11
+#define UART1_RE_GPIO_Port GPIOA
+#define UART1_DE_Pin GPIO_PIN_12
+#define UART1_DE_GPIO_Port GPIOA
 #define LCD_DATA_Pin GPIO_PIN_3
 #define LCD_DATA_GPIO_Port GPIOB
 #define LCD_WR_Pin GPIO_PIN_4
