@@ -8,6 +8,8 @@
 #ifndef INC_TDC7200_H_
 #define INC_TDC7200_H_
 
+#define TIMESCALE 1000000000000 //ps
+
 #include "stm32l4xx_hal.h"
 
 #define CONFIG1					0x00 //Configure PARITY_EN, TRIGG_EDGE, STOP_EDGE, START_EDGE, MEAS_MODE and START_MEAS
@@ -106,48 +108,62 @@ typedef enum
 
 typedef struct
 {
-	SPI_HandleTypeDef* SPI;
+	SPI_HandleTypeDef* hspi;
 	GPIO_TypeDef* CS_PORT;
 	uint16_t CS_PIN;
 	GPIO_TypeDef* EN_PORT;
 	uint16_t EN_PIN;
 
-	uint32_t CLOCK;
-	uint8_t CONFIG1_NOW;
-	uint8_t CONFIG2_NOW;
-	meas_TOF_mode MEAS_MODE;
-	calibration_2_periods CALIBRATION;
-	avg_cycles AVERAGING;
+	uint32_t clock;
 
+	union {
+		struct {
+			uint8_t config1_reg;
+			uint8_t config2_reg;
+			uint8_t int_status_reg;
+			uint8_t int_mask_reg;
+			uint8_t coarse_cntr_ovf_h_reg;
+			uint8_t coarse_cntr_ovf_l_reg;
+			uint8_t clock_cntr_ovf_h_reg;
+			uint8_t clock_cntr_ovf_l_reg;
+			uint8_t clock_cntr_stop_mask_h_reg;
+			uint8_t clock_cntr_stop_mask_l_reg;
+		};
+		uint8_t regs[10];
+	};
 	float ToF[5];
 }TDC7200_Name;
 
-void TDC7200_Init(TDC7200_Name* TDC, SPI_HandleTypeDef* SPI,
+HAL_StatusTypeDef TDC7200_ReadRegister8bit(TDC7200_Name* TDC, uint8_t REG_ADD, uint8_t *REG_VALUE);
+
+void TDC7200_Init(TDC7200_Name* TDC, SPI_HandleTypeDef* hspi,
 		GPIO_TypeDef* CS_PORT, uint16_t CS_PIN,
-		GPIO_TypeDef* EN_PORT, uint16_t EN_PIN);
-HAL_StatusTypeDef TDC7200_Config(TDC7200_Name* TDC, uint32_t CLOCK,
+		GPIO_TypeDef* EN_PORT, uint16_t EN_PIN,
+		uint32_t clock);
+
+HAL_StatusTypeDef TDC7200_Config(TDC7200_Name* TDC,
 		bit_toggle FORCE_CAL, bit_toggle PARITY,
 		edge_signal TRIG_EDGE, edge_signal STOP_EDGE, edge_signal START_EDGE,
 		meas_TOF_mode MEAS,
 		calibration_2_periods CALIBRATION, avg_cycles AVERAGING, num_stop RECEIVE,
 		interrupt_mask CLOCK_CNTR_OVF_MASK, interrupt_mask COARSE_CNTR_OVF_MASK, interrupt_mask NEW_MEAS_MASK,
-		uint16_t COARSE_CNTR_OVF, uint16_t CLOCK_CNTR_OVF, uint16_t CLOCK_CNTR_STOP_MASK);
-
+		uint16_t coarse_cntr_ovf, uint16_t clock_cntr_ovf, uint16_t clock_cntr_stop_mask);
 HAL_StatusTypeDef TDC7200_ByteConfig(TDC7200_Name* TDC, uint8_t *config);
 
-void TDC7200_Config_Clock(TDC7200_Name* TDC, uint32_t CLOCK);
+void TDC7200_Config_Clock(TDC7200_Name* TDC, uint32_t clcock);
 HAL_StatusTypeDef TDC7200_Config_Parity(TDC7200_Name* TDC, bit_toggle PARITY);
 HAL_StatusTypeDef TDC7200_Config_Edge(TDC7200_Name* TDC, edge_signal TRIG_EDGE, edge_signal STOP_EDGE, edge_signal START_EDGE);
 HAL_StatusTypeDef TDC7200_Config_Measmode(TDC7200_Name* TDC, meas_TOF_mode MEAS);
-HAL_StatusTypeDef TDC7200_Config_Calibration(TDC7200_Name* TDC, calibration_2_periods CALIBRATION, avg_cycles AVERAGING);
-HAL_StatusTypeDef TDC7200_Config_NumStop(TDC7200_Name* TDC, num_stop RECEIVE);
+HAL_StatusTypeDef TDC7200_Config_Calibration(TDC7200_Name* TDC, calibration_2_periods CALIBRATION);
+HAL_StatusTypeDef TDC7200_Config_MultiCycleAveragingMode(TDC7200_Name* TDC, avg_cycles AVERAGING);
+HAL_StatusTypeDef TDC7200_Config_NumberStop(TDC7200_Name* TDC, num_stop RECEIVE);
 HAL_StatusTypeDef TDC7200_Config_InterruptMask(TDC7200_Name* TDC, interrupt_mask CLOCK_CNTR_OVF_MASK, interrupt_mask COARSE_CNTR_OVF_MASK, interrupt_mask NEW_MEAS_MASK);
-HAL_StatusTypeDef TDC7200_Config_CounterOverflow(TDC7200_Name* TDC, uint16_t COARSE_CNTR_OVF, uint16_t CLOCK_CNTR_OVF, uint16_t CLOCK_CNTR_STOP_MASK);
+HAL_StatusTypeDef TDC7200_Config_CounterOverflow(TDC7200_Name* TDC, uint16_t coarse_cntr_ovf, uint16_t clock_cntr_ovf, uint16_t clock_cntr_stop_mask);
 
 void TDC7200_Active(TDC7200_Name* TDC);
 void TDC7200_Sleep(TDC7200_Name* TDC);
 
-TDC7200_StatusTypeDef TDC7200_GetStatus(TDC7200_Name* TDC);
+HAL_StatusTypeDef TDC7200_GetStatus(TDC7200_Name* TDC);
 
 HAL_StatusTypeDef TDC7200_Startmeasing(TDC7200_Name* TDC);
 HAL_StatusTypeDef TDC7200_GetTOF(TDC7200_Name* TDC);

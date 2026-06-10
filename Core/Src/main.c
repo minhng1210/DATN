@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "math.h"
+#include <math.h>
 
 #include "BC660K-GL.h"
 #include "HT1621B.h"
@@ -38,6 +38,46 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define ENABLE_HAL_STATUS_LOG   0
+
+#if ENABLE_HAL_STATUS_LOG
+
+#define print_hal_status(expr) do { \
+    HAL_StatusTypeDef __status = (expr); \
+    switch(__status){ \
+    case HAL_OK: \
+        RS485_log_printf("[INFO] %s:%d: HAL OK\r\n", __FILE__, __LINE__); \
+        break; \
+    case HAL_ERROR: \
+        RS485_log_printf("[WARN] %s:%d: HAL ERROR\r\n", __FILE__, __LINE__); \
+        break; \
+    case HAL_BUSY: \
+        RS485_log_printf("[WARN] %s:%d: HAL BUSY\r\n", __FILE__, __LINE__); \
+        break; \
+    case HAL_TIMEOUT: \
+        RS485_log_printf("[WARN] %s:%d: HAL TIMEOUT\r\n", __FILE__, __LINE__); \
+        break; \
+    default: \
+        RS485_log_printf("[WARN] %s:%d: UNKNOWN STATUS\r\n", __FILE__, __LINE__); \
+        break; \
+    } \
+} while(0)
+
+#else
+
+#define print_hal_status(expr) (expr)
+
+#endif
+
+
+#define LIFE_CYCLE 10 //year
+
+#define L_AB 0.060f //m
+#define PIPE_DIA 0.015f //m
+#define PI 3.1415927f
+
+#define CRYSTAL_CLOCK 8000000 //Hz
+
 #define RX_BUFFER_SIZE 256
 uint8_t rxBuffer[RX_BUFFER_SIZE];
 /* USER CODE END PD */
@@ -61,7 +101,30 @@ RTC_HandleTypeDef hrtc;
 SPI_HandleTypeDef hspi1;
 
 /* USER CODE BEGIN PV */
+uint16_t CRC16(uint8_t *data, uint16_t length)
+{
+    uint16_t crc = 0xFFFF;
 
+    for (uint16_t i = 0; i < length; i++)
+    {
+        crc ^= data[i];
+
+        for (uint8_t j = 0; j < 8; j++)
+        {
+            if (crc & 0x0001)
+            {
+                crc >>= 1;
+                crc ^= 0xA001;
+            }
+            else
+            {
+                crc >>= 1;
+            }
+        }
+    }
+
+    return crc;
+}
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -80,6 +143,9 @@ static void MX_LPUART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+RTC_TimeTypeDef sTime;
+RTC_DateTypeDef sDate;
+
 HT1621B_Name LCD1;
 TDC7200_Name TDC1;
 TDC1000_Name AFE1;
@@ -87,21 +153,45 @@ BC660K_Name NB1;
 AT24C64_Name EPPROM1;
 RS485_HandleTypeDef RS485;
 
-uint8_t TDC_INT_flag = 0;
-float t_ab, t_ba;
-float temperature;
-float veclocity;
+uint32_t meas_cycle = 5000; //ms
+uint32_t updatelcd_cycle = 1; //s
+uint32_t updatedata_cycle = (uint8_t)(LIFE_CYCLE * 365 * 24 * 60 * 60 / 180.0f / 10000000 + 1); //s
+uint32_t writedata_cycle = 4; //h
+uint32_t senddata_cycle = 1; //d
+
+uint8_t updatelcd_cycle_flag = 0;
+uint8_t updatedata_cycle_flag = 0;
+uint8_t writedata_cycle_flag = 0;
+uint8_t senddata_cycle_flag = 0;
+
+uint8_t write_position = 0;
+
+uint8_t tdc_int_flag = 0;
+uint8_t nb_int_flag = 0;
+
+uint8_t uart_int_flag = 0;
+uint8_t command_receive = 0;
+uint8_t data_receive[RX_BUFFER_SIZE];
+uint8_t data_receive_lenght = 0;
+
+float t_ab[6] = {0};
+float t_ba[6] = {0};
+float temperature = 0;
+float velocity = 0;
+float flow = 0;
+float water_used = 0;
+
+uint8_t rs485_maintain = 0;
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == TDC_INT_Pin)
     {
-    	TDC7200_GetTOF(&TDC1);
-    	TDC_INT_flag = 1;
+    	tdc_int_flag = 1;
     }
     if (GPIO_Pin == NB_INT_Pin)
     {
-
+    	nb_int_flag = 1;
     }
 }
 
@@ -109,77 +199,300 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     if (huart->Instance == USART1)
     {
+        HAL_UART_DMAStop(huart);
+        __HAL_UART_CLEAR_IDLEFLAG(huart);
 
-        HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rxBuffer, RX_BUFFER_SIZE);
+        RS485_TakeData(rxBuffer, Size, &command_receive, data_receive, &data_receive_lenght);
+    	uart_int_flag = 1;
+    	rs485_maintain = 50;
+
+        HAL_UARTEx_ReceiveToIdle_DMA(huart, rxBuffer, RX_BUFFER_SIZE);
+        __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
     }
+}
+
+void Init()
+{
+	RS485_Init(&RS485, &huart1, rxBuffer, RX_BUFFER_SIZE,
+			UART1_DE_GPIO_Port, UART1_DE_Pin,
+			UART1_RE_GPIO_Port, UART1_RE_Pin);
+	AT24C64_Init(&EPPROM1, &hi2c2, 0xA0);
+	TDC7200_Init(&TDC1, &hspi1,
+		  TDC_CS_GPIO_Port, TDC_CS_Pin,
+		  TDC_EN_GPIO_Port, TDC_EN_Pin,
+		  CRYSTAL_CLOCK);
+	TDC1000_Init(&AFE1, &hspi1,
+		  AFE_CS_GPIO_Port, AFE_CS_Pin,
+		  AFE_EN_GPIO_Port, AFE_EN_Pin,
+		  AFE_RTS_GPIO_Port, AFE_RTS_Pin,
+		  CRYSTAL_CLOCK);
+	HT1621B_Init(&LCD1,
+		  LCD_CS_GPIO_Port, LCD_CS_Pin,
+		  LCD_RD_GPIO_Port, LCD_RD_Pin,
+		  LCD_WR_GPIO_Port, LCD_WR_Pin,
+		  LCD_DATA_GPIO_Port, LCD_DATA_Pin);
+	BC660K_Init(&NB1, &hlpuart1,
+		  NB_PSM_GPIO_Port, NB_PSM_Pin,
+		  NB_RST_GPIO_Port, NB_RST_Pin);
+}
+
+void Active()
+{
+	RS485_ReceiveMode(&RS485);
+	HAL_GPIO_WritePin(OSC_EN_GPIO_Port, OSC_EN_Pin, GPIO_PIN_SET);
+	TDC7200_Active(&TDC1);
+	TDC7200_ByteConfig(&TDC1, TDC1.regs);
+	TDC1000_Active(&AFE1);
+	HT1621B_Active(&LCD1);
+	HT1621B_TurnOnDisplay(&LCD1);
+}
+
+void Sleep()
+{
+	//if (rs485_maintain <= 0) RS485_Disable(&RS485);
+	TDC7200_Sleep(&TDC1);
+	TDC1000_Sleep(&AFE1);
+	//HAL_GPIO_WritePin(OSC_EN_GPIO_Port, OSC_EN_Pin, GPIO_PIN_RESET);
+	//HT1621B_Sleep(&LCD1);
+	//HT1621B_TurnOffDisplay(&LCD1);
+}
+
+void Config()
+{
+	TDC7200_Config(&TDC1,
+			FORECE_CALIBRATION_OFF, PARITY_DIS,
+			TRIG_EDGE_RISING, STOP_EDGE_RISING, START_EDGE_RISING,
+			MEAS_LONG_ToF,
+			CALIBRATION_10_CLOCK_PERIODS, AVERAGING_1_CYCLES, RECEIVE_FIVE_STOPS,
+			CLOCK_CNTR_OVF_MASK_EN, COARSE_CNTR_OVF_MASK_EN, NEW_MEAS_MASK_EN,
+			0xFFFF, 0x028C, 0x018C);
+	TDC1000_Config(&AFE1,
+			TX_FREQ_DIV_BY_8, 5,
+			MEASUREMENT_1_CYCLES, RECEIVE_ALL_PULSE,
+			DAMPING_DIS, TOF_MEAS_MODE1,
+			TEMP_MODE_2_CHANNEL, TEMP_RTD_SEL_PT1000, TEMP_CLK_DIV_BY_8,
+			BLANKING_DIS, ECHO_QUAL_THLD_125mV,
+			RECEIVE_MODE_SINGLE_ECHO, TRIG_EDGE_POLARITY_RISING, 31,
+			PGA_GAIN_21dB, PGA_CTRL_ACTIVE, LNA_CTRL_ACTIVE, LNA_FEEDBACK_CAP,
+			0x003E,
+			FORCE_SHORT_TOF_DIS, SHORT_TOF_BLANK_PERIOD_64xT0,
+			ECHO_TIMEOUT_EN, TOF_TIMEOUT_CTRL_128xT0,
+			CLOCKIN_DIV_BY_1, AUTOZERO_PERIOD_256xT0);
+
+	uint8_t temp = 0xFF;
+
+	printf("TDC7200 register after configure\r\n");
+	for (uint8_t i = 0; i < 10; i++)
+	{
+		TDC7200_ReadRegister8bit(&TDC1, i, &temp);
+		printf("Address 0x%02X, Value 0x%02X\r\n", i, temp);
+	}
+
+	printf("TDC1000 register after configure\r\n");
+	for (uint8_t i = 0; i < 10; i++)
+	{
+		TDC1000_ReadRegister(&AFE1, i, &temp);
+		printf("Address 0x%02X, Value 0x%02X\r\n", i, temp);
+	}
+
+	HT1621B_Config(&LCD1);
+	/*
+	uint8_t tdc7200config[11];
+	uint8_t tdc1000config[10];
+	uint8_t cycle[4];
+
+	AT24C64_Read(&EPPROM1, 0, tdc7200config, 11);
+	AT24C64_Read(&EPPROM1, 11, tdc1000config, 8);
+	AT24C64_Read(&EPPROM1, 20, cycle, 4);
+
+	TDC7200_ByteConfig(&TDC1, tdc7200config);
+	TDC1000_ByteConfig(&AFE1, tdc1000config);
+
+	meas_cycle = cycle[0];
+	updatelcd_cycle = cycle[1];
+	writedata_cycle = cycle[2];
+	senddata_cycle = cycle[3];
+	 */
 }
 
 void Meas_TOF()
 {
-	TDC7200_Active(&TDC1);
-	TDC7200_Config(&TDC1, 8000000,
-			FORECE_CALIBRATION_OFF, PARITY_DIS,
-			TRIG_EDGE_RISING, STOP_EDGE_RISING, START_EDGE_RISING,
-			MEAS_LONG_ToF,
-			CALIBRATION_20_CLOCK_PERIODS, AVERAGING_1_CYCLES, RECEIVE_ALL_PULSE,
-			CLOCK_CNTR_OVF_MASK_EN, COARSE_CNTR_OVF_MASK_EN, NEW_MEAS_MASK_EN,
-			0xff, 0xff, 0x00);
-
+	print_hal_status(TDC1000_ToF_Select(&AFE1, SELECT_CHANNEL2));
+	tdc_int_flag = 0;
+	print_hal_status(TDC7200_Startmeasing(&TDC1));
+	uint32_t start1 = HAL_GetTick();
+	while (tdc_int_flag == 0)
+	{
+		if (HAL_GetTick() - start1 >= 100)
+		{
+			printf("Measuring time up timeout\r\n");
+			break;
+		}
+	}
+	if (tdc_int_flag == 1)
+	{
+		print_hal_status(TDC1000_Get_Error(&AFE1));
+		HAL_Delay(100);
+		print_hal_status(TDC7200_GetStatus(&TDC1));
+		print_hal_status(TDC7200_GetTOF(&TDC1));
+		t_ab[0] = TDC1.ToF[0];
+		tdc_int_flag = 0;
+		printf("Measuring time up success. Time up: %f us\r\n", t_ab[0] / 1000000);
+	}
+	else
+	{
+		printf("Measuring time up fail\r\n");
+	}
+	TDC1000_Sleep(&AFE1);
+	HAL_Delay(100);
 	TDC1000_Active(&AFE1);
-	TDC1000_Config(&AFE1,
-			TX_FREQ_DIV_BY_8, 5,
-			MEASUREMENT_1_CYCLES, RECEIVE_ALL_PULSE,
-			DAMPING_DIS, TOF_MEAS_MODE0,
-			TEMP_MODE_2_CHANNEL, TEMP_RTD_SEL_PT1000, TEMP_CLK_DIV_BY_8,
-			BLANKING_DIS, ECHO_QUAL_THLD_125mV,
-			RECEIVE_MODE_SINGLE_ECHO, TRIG_EDGE_POLARITY_RISING, 31,
-			PGA_GAIN_0dB, PGA_CTRL_ACTIVE, LNA_CTRL_ACTIVE, LNA_FEEDBACK_CAP,
-			0x00,
-			FORCE_SHORT_TOF_DIS, SHORT_TOF_BLANK_PERIOD_64xT0,
-			ECHO_TIMEOUT_EN, TOF_TIMEOUT_CTRL_256xT0,
-			CLOCKIN_DIV_BY_1, AUTOZERO_PERIOD_64xT0);
+	HAL_Delay(100);
 
-	TDC1000_ToF_Select(&AFE1, SELECT_CHANNEL1);
-	TDC7200_Startmeasing(&TDC1);
-	while (TDC_INT_flag == 0);
-	t_ab = TDC1.ToF[0];
+	print_hal_status(TDC1000_ToF_Select(&AFE1, SELECT_CHANNEL1));
+	tdc_int_flag = 0;
+	print_hal_status(TDC7200_Startmeasing(&TDC1));
+	uint32_t start2 = HAL_GetTick();
+	while (tdc_int_flag == 0)
+	{
+		if (HAL_GetTick() - start2 >= 100)
+		{
+			printf("Measuring time down timeout. \r\n");
+			break;
+		}
+	}
+	if (tdc_int_flag == 1)
+	{
+		print_hal_status(TDC1000_Get_Error(&AFE1));
+		print_hal_status(TDC7200_GetStatus(&TDC1));
+		print_hal_status(TDC7200_GetTOF(&TDC1));
+		t_ba[0] = TDC1.ToF[0];
+		tdc_int_flag = 0;
+		printf("Measuring time down success. Time down: %f us\r\n", t_ba[0] / 1000000);
+	}
+	else
+	{
+		printf("Measuring time down fail\r\n");
+	}
 
-	TDC1000_ToF_Select(&AFE1, SELECT_CHANNEL2);
-	TDC7200_Startmeasing(&TDC1);
-	while (TDC_INT_flag == 0);
-	t_ba = TDC1.ToF[0];
 }
 
 void Meas_Temp()
 {
-	TDC7200_Active(&TDC1);
+	//TDC7200_Active(&TDC1);
+	//TDC1000_Active(&AFE1);
 
-	TDC1000_Active(&AFE1);
-	TDC1000_Temp_Select(&AFE1);
-
-	TDC7200_Startmeasing(&TDC1);
-
-	while (TDC_INT_flag == 0);
-	float t_REF = TDC1.ToF[0];
-	float t_RTD1 = TDC1.ToF[1];
-	float RTD1 = 1000 * t_REF / t_RTD1;
-	temperature = (RTD1/1000 - 1) * 0.00385f;
+	print_hal_status(TDC1000_Temp_Select(&AFE1));
+	tdc_int_flag = 0;
+	print_hal_status(TDC7200_Startmeasing(&TDC1));
+	uint32_t start = HAL_GetTick();
+	while (tdc_int_flag == 0)
+	{
+		if (HAL_GetTick() - start >= 100)
+		{
+			printf("Measuring tempt timeout\r\n");
+			break;
+		}
+	}
+	if (tdc_int_flag == 1)
+	{
+		print_hal_status(TDC1000_Get_Error(&AFE1));
+		print_hal_status(TDC7200_GetStatus(&TDC1));
+		print_hal_status(TDC7200_GetTOF(&TDC1));
+		float t_REF = TDC1.ToF[0];
+		float t_RTD1 = TDC1.ToF[1];
+		tdc_int_flag = 0;
+		float RTD1 = 1000 * t_REF / t_RTD1;
+		temperature = (RTD1/1000 - 1) / 0.00385f;
+		printf("Measuring tempt success\r\n");
+	}
+	else
+		printf("Measuring tempt fail\r\n");
 }
 
-void Meas_Veclocity()
+void Calculator_WaterUsed()
 {
-	Meas_TOF();
-	Meas_Temp();
-	float c = 1402.388
-			+ 5.03830 * temperature
-			- 5.81090E-2 * pow(temperature, 2)
-			+ 3.3432E-4 * pow(temperature, 3)
-			- 1.47797E-6 * pow(temperature, 4)
-			+ 3.1419E-9 * pow(temperature, 5);
-	veclocity = fabs(t_ab - t_ba) * pow(c, 2) / (2 * 0.058f);
+	float c = 1402.388 + 5.03830 * temperature; //m/s
+	float delta_tof = t_ab[0] - t_ba[0];
+	velocity = delta_tof * c * c / (2 * L_AB) / TIMESCALE; //m/s
+	flow = 10 * velocity * PI * (10*PIPE_DIA) * (10*PIPE_DIA) / 4; //l/s
+	water_used += flow * (meas_cycle / 1000.0f);
+	printf("Difference time = %f us, Ultrasonic velocity = %f m/s, Velocity = %f m/s, Flow %f l/s, Water used = %f l\r\n",
+			delta_tof/1000000, c, velocity, flow, water_used);
 }
 
+void Update_LCD()
+{
+	HT1621B_BDTM1174_WirteData(&LCD1, flow, UNIT_l);
+}
 
+void Save_Data()
+{
+	write_position = AT24C64_Read(&EPPROM1, 24, &write_position, 1); //25 -> 1636
+	if (write_position < 25 || write_position > 180)
+		write_position = 25;
+	uint8_t data_write[9];
+
+	HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+	HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+	data_write[0] = sTime.Hours;
+	data_write[1] = sTime.Minutes;
+	data_write[2] = sDate.Date;
+	data_write[3] = sDate.Month;
+	data_write[4] = sDate.Year;
+
+	uint32_t temp = (uint32_t)water_used;
+	memcpy(&data_write[5], &temp, 4);
+
+	AT24C64_Write(&EPPROM1, write_position, data_write, 9);
+	write_position += 9;
+}
+
+void Send_DataEpprom()
+{
+	uint8_t data_temp[180 * 9];
+	AT24C64_Read(&EPPROM1, 25, data_temp, 180 * 9);
+	RS485_Transmit(data_temp, 180 * 9);
+}
+
+void Send_DataDirect()
+{
+	uint8_t buffer[4];
+	memcpy(buffer, &flow, 4);
+	RS485_Transmit(buffer, 4);;
+}
+
+void Send_DataToF()
+{
+	uint8_t data_temp[sizeof(t_ab) + sizeof(t_ba)];
+	memcpy(data_temp, t_ab, sizeof(t_ab));
+	memcpy(data_temp + sizeof(t_ab), t_ba, sizeof(t_ba));
+	RS485_Transmit(data_temp, sizeof(t_ab) + sizeof(t_ba));
+}
+
+void Use_Config()
+{
+	TDC7200_ByteConfig(&TDC1, &data_receive[0]); //11yte
+	TDC1000_ByteConfig(&AFE1, &data_receive[11]); //9byte
+
+	meas_cycle = data_receive[20];
+	updatelcd_cycle = data_receive[21];
+	writedata_cycle = data_receive[22];
+	senddata_cycle = data_receive[23];
+
+	sDate.Date = data_receive[24];
+	sDate.Month = data_receive[25];
+	sDate.Year = data_receive[26];
+	sTime.Hours = data_receive[27];
+	sTime.Minutes = data_receive[28];
+	sTime.Seconds = data_receive[29];
+	HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+	HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+}
+
+void Save_Config()
+{
+	AT24C64_Write(&EPPROM1, 1, data_receive, 24);
+}
 /* USER CODE END 0 */
 
 /**
@@ -219,43 +532,74 @@ int main(void)
   MX_I2C2_Init();
   MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HT1621_Init(&LCD1,
-		  LCD_CS_GPIO_Port, LCD_CS_Pin,
-		  LCD_RD_GPIO_Port, LCD_RD_Pin,
-		  LCD_WR_GPIO_Port, LCD_WR_Pin,
-		  LCD_DATA_GPIO_Port, LCD_DATA_Pin);
-  TDC7200_Init(&TDC1, &hspi1,
-		  TDC_CS_GPIO_Port, TDC_CS_Pin,
-		  TDC_EN_GPIO_Port, TDC_EN_Pin);
-  TDC1000_Init(&AFE1, &hspi1,
-		  AFE_CS_GPIO_Port, AFE_CS_Pin,
-		  AFE_EN_GPIO_Port, AFE_EN_Pin,
-		  AFE_RTS_GPIO_Port, AFE_RTS_Pin);
-  BC660K_Init(&NB1, &hlpuart1,
-		  NB_PSM_GPIO_Port, NB_PSM_Pin,
-		  NB_RST_GPIO_Port, NB_RST_Pin);
-  AT24C64_Init(&EPPROM1, &hi2c2, 0xA0);
+  Init();
+  Active();
+  Config();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rxBuffer, RX_BUFFER_SIZE);
+  //HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rxBuffer, RX_BUFFER_SIZE);
+  //__HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
   while (1)
   {
-	  Meas_Veclocity();
-	  float flow = veclocity * 3.14159265358979323846f * 0.015 * 0.015 /4;
-	  LCD1.value_in_litre = flow;
-	  HT1621B_BDTM1174_WirteData(&LCD1);
+	  printf("\r\nStart\r\n");
+	  Active();
+	  Meas_TOF();
+	  //Meas_Temp();
+	  Calculator_WaterUsed();
+	  Update_LCD();
+	  //Save_Data();
+	  Sleep();
+
+	  if (uart_int_flag)
+	  {
+		  switch (command_receive)
+		  {
+		  	  case READ_DATA_EPPROM:
+		  		Send_DataEpprom();
+		  		break;
+		  	  case READ_DATA_DIRECT:
+		  		Send_DataDirect();
+		  		break;
+		  	  case READ_DATA_TOF:
+		  		  Send_DataToF();
+		  		  break;
+		  	  case USE_CONFIG:
+		  		Use_Config();
+		  		break;
+		  	  case SAVE_CONFIG:
+		  		Save_Config();
+		  		break;
+		  }
+		  uart_int_flag = 0;
+		  command_receive = 0;
+		  rs485_maintain = 50;
+	  }
+	  else
+		  rs485_maintain--;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 	  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
-	  HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 9, RTC_WAKEUPCLOCK_CK_SPRE_16BITS);
+
+	  __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+      __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
+
+	  uint32_t counter = (uint32_t)(meas_cycle / 0.488f);
+	  HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, counter, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+
+
+	  __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 
 	  HAL_SuspendTick();
 	  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+
 	  SystemClock_Config();
 	  HAL_ResumeTick();
+
+	  __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
+	  __HAL_RTC_WAKEUPTIMER_CLEAR_FLAG(&hrtc, RTC_FLAG_WUTF);
   }
   /* USER CODE END 3 */
 }
@@ -290,7 +634,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_7;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_10;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -306,7 +650,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -399,7 +743,7 @@ static void MX_I2C2_Init(void)
 
   /* USER CODE END I2C2_Init 1 */
   hi2c2.Instance = I2C2;
-  hi2c2.Init.Timing = 0x00201D2B;
+  hi2c2.Init.Timing = 0x00B07CB4;
   hi2c2.Init.OwnAddress1 = 0;
   hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -606,7 +950,6 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 

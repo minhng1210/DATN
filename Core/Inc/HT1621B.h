@@ -65,17 +65,25 @@ typedef struct
 	uint16_t WR_PIN;
 	GPIO_TypeDef* DATA_PORT;
 	uint16_t DATA_PIN;
-	uint8_t RAM[18];
-	float value_in_litre;
+	uint8_t RAM[32];
 }HT1621B_Name;
 
-void HT1621_Init(HT1621B_Name* LCD,
+void HT1621B_Init(HT1621B_Name* LCD,
 		GPIO_TypeDef* CS_PORT, uint16_t CS_PIN,
 		GPIO_TypeDef* RD_PORT, uint16_t RD_PIN,
 		GPIO_TypeDef* WR_PORT, uint16_t WR_PIN,
 		GPIO_TypeDef* DATA_PORT, uint16_t DATA_PIN);
+
 void HT1621B_ReadData(HT1621B_Name* LCD, uint8_t address, uint8_t len);
 void HT1621B_WriteData(HT1621B_Name* LCD, uint8_t address, uint8_t *data, uint8_t len);
+
+void HT1621B_Active(HT1621B_Name* LCD);
+void HT1621B_Sleep(HT1621B_Name* LCD);
+
+void HT1621B_TurnOnDisplay(HT1621B_Name* LCD);
+void HT1621B_TurnOffDisplay(HT1621B_Name* LCD);
+
+void HT1621B_Config(HT1621B_Name* LCD);
 
 typedef enum
 {
@@ -90,9 +98,8 @@ typedef enum
 	UNIT_l = 0b0010 	// L
 }unit_measure;
 
-void HT1621B_BDTM1174_WirteData(HT1621B_Name* LCD);
-void HT1621B_BDTM1174_ReadData(HT1621B_Name* LCD);
+void HT1621B_BDTM1174_WirteData(HT1621B_Name* LCD, float value, unit_measure unit);
+float HT1621B_BDTM1174_ReadData(HT1621B_Name* LCD);
 void HT1621B_BDTM1174_LowBattery(HT1621B_Name* LCD, status_symbol STATUS);
-
 
 #endif /* INC_HT1621B_H_ */

@@ -63,6 +63,42 @@ typedef enum
 
 typedef enum
 {
+	TRANSMIT_0_PULSE = 0x00,
+	TRANSMIT_1_PULSE = 0x01,
+	TRANSMIT_2_PULSE = 0x02,
+	TRANSMIT_3_PULSE = 0x03,
+	TRANSMIT_4_PULSE = 0x04,
+	TRANSMIT_5_PULSE = 0x05,
+	TRANSMIT_6_PULSE = 0x06,
+	TRANSMIT_7_PULSE = 0x07,
+	TRANSMIT_8_PULSE = 0x08,
+	TRANSMIT_9_PULSE = 0x09,
+	TRANSMIT_10_PULSE = 0x0A,
+	TRANSMIT_11_PULSE = 0x0B,
+	TRANSMIT_12_PULSE = 0x0C,
+	TRANSMIT_13_PULSE = 0x0D,
+	TRANSMIT_14_PULSE = 0x0E,
+	TRANSMIT_15_PULSE = 0x0F,
+	TRANSMIT_16_PULSE = 0x10,
+	TRANSMIT_17_PULSE = 0x11,
+	TRANSMIT_18_PULSE = 0x12,
+	TRANSMIT_19_PULSE = 0x13,
+	TRANSMIT_20_PULSE = 0x14,
+	TRANSMIT_21_PULSE = 0x15,
+	TRANSMIT_22_PULSE = 0x16,
+	TRANSMIT_23_PULSE = 0x17,
+	TRANSMIT_24_PULSE = 0x18,
+	TRANSMIT_25_PULSE = 0x19,
+	TRANSMIT_26_PULSE = 0x1A,
+	TRANSMIT_27_PULSE = 0x1B,
+	TRANSMIT_28_PULSE = 0x1C,
+	TRANSMIT_29_PULSE = 0x1D,
+	TRANSMIT_30_PULSE = 0x1E,
+	TRANSMIT_31_PULSE = 0x1F,
+}mumber_transmit_pulse;
+
+typedef enum
+{
 	MEASUREMENT_1_CYCLES = 0x00 << 3,
 	MEASUREMENT_2_CYCLES = 0x01 << 3,
 	MEASUREMENT_4_CYCLES = 0x02 << 3,
@@ -83,7 +119,7 @@ typedef enum
 	RECEIVE_5_PULSE = 0x05,
 	RECEIVE_6_PULSE = 0x06,
 	RECEIVE_7_PULSE = 0x07
-}mumber_events_receive;
+}mumber_receive_events;
 
 typedef enum
 {
@@ -188,7 +224,7 @@ typedef enum
 
 typedef struct
 {
-	SPI_HandleTypeDef* SPI;
+	SPI_HandleTypeDef* hspi;
 	GPIO_TypeDef* CS_PORT;
 	uint16_t CS_PIN;
 	GPIO_TypeDef* EN_PORT;
@@ -196,26 +232,67 @@ typedef struct
 	GPIO_TypeDef* RST_PORT;
 	uint16_t RST_PIN;
 
-	uint32_t CLOCK;
-	uint8_t CONFIG_2_NOW;
+	uint32_t clock;
+
+	union {
+		struct {
+			uint8_t config_0reg;
+			uint8_t config_1reg;
+			uint8_t config_2reg;
+			uint8_t config_3reg;
+			uint8_t config_4reg;
+			uint8_t tof1_reg;
+			uint8_t tof0_reg;
+			uint8_t errorflag_reg;
+			uint8_t timeout_reg;
+			uint8_t clockrate_reg;
+		};
+		uint8_t regs[10];
+	};
 }TDC1000_Name;
 
-void TDC1000_Init(TDC1000_Name* AFE, SPI_HandleTypeDef* SPI,
+HAL_StatusTypeDef TDC1000_WriteRegister(TDC1000_Name* AFE, uint8_t REG_ADD, uint8_t REG_VALUE);
+HAL_StatusTypeDef TDC1000_ReadRegister(TDC1000_Name* AFE, uint8_t REG_ADD, uint8_t *REG_VALUE);
+
+void TDC1000_Init(TDC1000_Name* AFE, SPI_HandleTypeDef* hspi,
 		GPIO_TypeDef* CS_PORT, uint16_t CS_PIN,
 		GPIO_TypeDef* EN_PORT, uint16_t EN_PIN,
-		GPIO_TypeDef* RST_PORT, uint16_t RST_PIN);
+		GPIO_TypeDef* RST_PORT, uint16_t RST_PIN,
+		uint32_t clcock);
+
 HAL_StatusTypeDef TDC1000_Config(TDC1000_Name* AFE,
-		tx_frequency_divider TX_FREQ_DIV, uint32_t NUM_TX,
-		measurement_cycles MEASUREMENT, mumber_events_receive RECEIVE,
+		tx_frequency_divider TX_FREQ_DIV, mumber_transmit_pulse TRANSMIT,
+		measurement_cycles MEASUREMENT, mumber_receive_events RECEIVE,
 		mode_toggle DAMPING, tof_meas_type TOF_MEAS_MODE,
 		temp_meas_channel TEMP_MODE, temp_RTD_select TEMP_RTD_SEL, temp_frequency_divider TEMP_CLK_DIV,
 		mode_toggle BLANKING, echo_qualification_threshold ECHO_QUAL_THLD,
 		mode_toggle RECEIVE_MODE, mode_toggle TRIG_EDGE_POLARITY, uint8_t TX_PH_SHIFT_POS,
 		pga_gain PGA_GAIN, mode_toggle PGA_CTRL, mode_toggle LNA_CTRL, lna_feedback_type LNA_FB,
-		uint16_t TIMING_REG,
+		uint16_t timing_reg,
 		mode_toggle FORCE_SHORT_TOF, short_tof_blank_period SHORT_TOF_BLANK_PERIOD,
 		mode_toggle ECHO_TIMEOUT, tof_timeout_ctrl TOF_TIMEOUT_CTRL,
 		clock_in_frequency_divider CLOCKIN_DIV, auto_zero_period AUTOZERO_PERIOD);
+HAL_StatusTypeDef TDC1000_ByteConfig(TDC1000_Name* AFE, uint8_t *config);
+
+void TDC1000_Reset(TDC1000_Name* AFE);
+
+void TDC1000_ConfigClock(TDC1000_Name *AFE, uint32_t clcock);
+HAL_StatusTypeDef TDC1000_ConfigTrigEdge(TDC1000_Name* AFE, mode_toggle TRIG_EDGE_POLARITY);
+HAL_StatusTypeDef TDC1000_ConfigFrequencyDivider(TDC1000_Name *AFE, tx_frequency_divider TX_FREQ_DIV, temp_frequency_divider TEMP_CLK_DIV, clock_in_frequency_divider CLOCKIN_DIV);
+HAL_StatusTypeDef TDC1000_ConfigTransmit(TDC1000_Name *AFE, mumber_transmit_pulse TRANSMIT, mode_toggle DAMPING, uint8_t TX_PH_SHIFT_POS);
+HAL_StatusTypeDef TDC1000_ConfigMultiCycleAveraging(TDC1000_Name *AFE, measurement_cycles MEASUREMENT);
+HAL_StatusTypeDef TDC1000_ConfigReceive(TDC1000_Name *AFE, mumber_receive_events RECEIVE, mode_toggle RECEIVE_MODE);
+HAL_StatusTypeDef TDC1000_ConfigToFMeasureMode(TDC1000_Name *AFE, tof_meas_type TOF_MEAS_MODE);
+HAL_StatusTypeDef TDC1000_ConfigTempMeasure(TDC1000_Name *AFE, temp_meas_channel TEMP_MODE, temp_RTD_select TEMP_RTD_SEL);
+HAL_StatusTypeDef TDC1000_ConfigThreshold(TDC1000_Name *AFE, echo_qualification_threshold ECHO_QUAL_THLD);
+HAL_StatusTypeDef TDC1000_ConfigFilter(TDC1000_Name *AFE, pga_gain PGA_GAIN, mode_toggle PGA_CTRL, mode_toggle LNA_CTRL, lna_feedback_type LNA_FB);
+HAL_StatusTypeDef TDC1000_ConfigTimingField(TDC1000_Name *AFE, uint16_t timing_reg);
+HAL_StatusTypeDef TDC1000_ConfigShortToF(TDC1000_Name *AFE, mode_toggle FORCE_SHORT_TOF, short_tof_blank_period SHORT_TOF_BLANK_PERIOD);
+HAL_StatusTypeDef TDC1000_ConfigTimeout(TDC1000_Name *AFE, mode_toggle ECHO_TIMEOUT, tof_timeout_ctrl TOF_TIMEOUT_CTRL);
+HAL_StatusTypeDef TDC1000_ConfigAutozeroPeriod(TDC1000_Name *AFE, auto_zero_period AUTOZERO_PERIOD);
+
+HAL_StatusTypeDef TDC1000_Get_Error(TDC1000_Name* AFE);
+
 HAL_StatusTypeDef TDC1000_ToF_Select(TDC1000_Name* AFE, select_channel CHANNEL);
 HAL_StatusTypeDef TDC1000_Temp_Select(TDC1000_Name* AFE);
 void TDC1000_Active(TDC1000_Name* AFE);
