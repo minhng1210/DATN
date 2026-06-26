@@ -7,8 +7,6 @@
 
 #include "RS485.h"
 
-#define ENABLE_LOG   1
-
 static RS485_HandleTypeDef* rs485_dbg = NULL;
 
 void RS485_Init(RS485_HandleTypeDef* rs,
@@ -50,7 +48,7 @@ void RS485_SetUse(RS485_HandleTypeDef* rs)
     rs485_dbg = rs;
 }
 
-static uint16_t CRC16(uint8_t *data, uint16_t length)
+uint16_t CRC16(uint8_t *data, uint16_t length)
 {
     uint16_t crc = 0xFFFF;
 
@@ -60,7 +58,7 @@ static uint16_t CRC16(uint8_t *data, uint16_t length)
 
         for (uint8_t j = 0; j < 8; j++)
         {
-            if (crc & 0x0001)
+        	if ((crc & 0x0001) != 0)
             {
                 crc >>= 1;
                 crc ^= 0xA001;
@@ -75,7 +73,7 @@ static uint16_t CRC16(uint8_t *data, uint16_t length)
     return crc;
 }
 
-HAL_StatusTypeDef RS485_log_printf(const char *fmt, ...)
+HAL_StatusTypeDef RS485_printf(const char *fmt, ...)
 {
 	if (ENABLE_LOG)
 	{
@@ -130,33 +128,45 @@ HAL_StatusTypeDef RS485_Transmit(uint8_t *buffer, uint16_t len)
     frame[len + 4] = crc >> 8;
 
 	HAL_StatusTypeDef status = HAL_UART_Transmit(rs485_dbg->UART, frame, len + 5, 100);
+
 	RS485_ReceiveMode(rs485_dbg);
 	return status;
 }
 
-void RS485_TakeData(uint8_t *rxBuffer, uint8_t size,uint8_t *command_receive, uint8_t *data_receive, uint8_t *data_receive_lenght)
+uint8_t RS485_TakeData(uint8_t *rxBuffer, uint8_t size, uint8_t *command_receive, uint8_t *data_receive, uint8_t *data_receive_lenght)
 {
 	if (size < 6)
-		return;
+		return 0;
 	if (rxBuffer[0] != 0xAA)
-		return;
+		return 0;
 
-	uint16_t crc_rx = rxBuffer[3 + *data_receive_lenght] | (rxBuffer[4 + *data_receive_lenght] << 8);
-	uint16_t crc_calc = CRC16(&rxBuffer[3], *data_receive_lenght);
+	uint16_t len = rxBuffer[1] | rxBuffer[2] << 8;
+	uint16_t crc_rx = rxBuffer[len + 3] | (rxBuffer[len + 4] << 8);
+	uint16_t crc_calc = CRC16(&rxBuffer[3], len);
 	if (crc_rx != crc_calc)
 	{
-		//RS485_printf("ERROR CRC");
-		return;
+		//printf("ERROR CRC\r\n CRC RX: %04X | CRC CALC: %04X\n", crc_rx, crc_calc);
+		return 0;
 	}
+	else
+		//printf("RIGHT CRC\r\n");
 
-	*data_receive_lenght = rxBuffer[1] | rxBuffer[2] << 8;
-	*command_receive = rxBuffer[4];
-	memcpy(data_receive, &rxBuffer[4], *data_receive_lenght);
+	*data_receive_lenght = len;
+	*command_receive = rxBuffer[3];
+	memcpy(data_receive, &rxBuffer[4], *data_receive_lenght - 1);
+	memset(rxBuffer, 0, size);
+	return 1;
 }
 
-int _write(int file, char *ptr, int len) {
-	RS485_TransmitMode(rs485_dbg);
-	HAL_UART_Transmit(rs485_dbg->UART, (uint8_t*) ptr, len, 50);
-	RS485_ReceiveMode(rs485_dbg);
-	return len;
+int _write(int file, char *ptr, int len)
+{
+	if (ENABLE_LOG)
+	{
+		RS485_TransmitMode(rs485_dbg);
+		HAL_UART_Transmit(rs485_dbg->UART, (uint8_t*) ptr, len, 100);
+		RS485_ReceiveMode(rs485_dbg);
+		HAL_Delay(1);
+		return len;
+	}
+	return 0;
 }

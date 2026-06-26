@@ -98,8 +98,11 @@ typedef enum
 	UNIT_l = 0b0010 	// L
 }unit_measure;
 
+void HT1621B_BDTM1174_WirteBlank(HT1621B_Name* LCD);
 void HT1621B_BDTM1174_WirteData(HT1621B_Name* LCD, float value, unit_measure unit);
 float HT1621B_BDTM1174_ReadData(HT1621B_Name* LCD);
+void HT1621B_BDTM1174_WirteError(HT1621B_Name* LCD, uint8_t error_reg_value);
 void HT1621B_BDTM1174_LowBattery(HT1621B_Name* LCD, status_symbol STATUS);
+void HT1621B_BDTM1174_Test(HT1621B_Name* LCD, status_symbol STATUS);
 
 #endif /* INC_HT1621B_H_ */

@@ -45,8 +45,8 @@ typedef enum
 	LNA_CTRL_BYPASS = 0x01 << 3,
 	FORCE_SHORT_TOF_DIS = 0x00 << 6,
 	FORCE_SHORT_TOF_EN = 0x01 << 6,
-	ECHO_TIMEOUT_DIS = 0x00 << 2,
-	ECHO_TIMEOUT_EN = 0x01 << 2,
+	ECHO_TIMEOUT_DIS = 0x01 << 2,
+	ECHO_TIMEOUT_EN = 0x00 << 2,
 }mode_toggle;
 
 typedef enum
@@ -291,7 +291,7 @@ HAL_StatusTypeDef TDC1000_ConfigShortToF(TDC1000_Name *AFE, mode_toggle FORCE_SH
 HAL_StatusTypeDef TDC1000_ConfigTimeout(TDC1000_Name *AFE, mode_toggle ECHO_TIMEOUT, tof_timeout_ctrl TOF_TIMEOUT_CTRL);
 HAL_StatusTypeDef TDC1000_ConfigAutozeroPeriod(TDC1000_Name *AFE, auto_zero_period AUTOZERO_PERIOD);
 
-HAL_StatusTypeDef TDC1000_Get_Error(TDC1000_Name* AFE);
+HAL_StatusTypeDef TDC1000_Get_Error(TDC1000_Name* AFE, uint8_t *error_reg_value);
 
 HAL_StatusTypeDef TDC1000_ToF_Select(TDC1000_Name* AFE, select_channel CHANNEL);
 HAL_StatusTypeDef TDC1000_Temp_Select(TDC1000_Name* AFE);

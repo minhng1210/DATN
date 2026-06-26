@@ -88,6 +88,7 @@ HAL_StatusTypeDef TDC1000_Config(TDC1000_Name* AFE,
 	AFE->config_4reg = RECEIVE_MODE | TRIG_EDGE_POLARITY | TX_PH_SHIFT_POS;
 	AFE->tof1_reg = PGA_GAIN | PGA_CTRL | LNA_CTRL | LNA_FB | ((uint8_t)(timing_reg >> 8) & 0x03);
 	AFE->tof0_reg = (uint8_t)(timing_reg);
+	AFE->errorflag_reg = 0x07;
 	AFE->timeout_reg = FORCE_SHORT_TOF | SHORT_TOF_BLANK_PERIOD | ECHO_TIMEOUT | TOF_TIMEOUT_CTRL;
 	AFE->clockrate_reg = CLOCKIN_DIV | AUTOZERO_PERIOD;
 
@@ -114,11 +115,11 @@ HAL_StatusTypeDef TDC1000_ByteConfig(TDC1000_Name* AFE, uint8_t *config)
 	if (status != HAL_OK) goto error;
 	status = TDC1000_WriteRegister(AFE, TOF_0, config[6]);
 	if (status != HAL_OK) goto error;
-	status = TDC1000_WriteRegister(AFE, TOF_0, config[6]);
+	status = TDC1000_WriteRegister(AFE, ERROR_FLAGS, config[7]);
 	if (status != HAL_OK) goto error;
-	status = TDC1000_WriteRegister(AFE, TIMEOUT, config[7]);
+	status = TDC1000_WriteRegister(AFE, TIMEOUT, config[8]);
 	if (status != HAL_OK) goto error;
-	status = TDC1000_WriteRegister(AFE, CLOCK_RATE, config[8]);
+	status = TDC1000_WriteRegister(AFE, CLOCK_RATE, config[9]);
 	if (status != HAL_OK) goto error;
 	return HAL_OK;
 
@@ -244,30 +245,31 @@ HAL_StatusTypeDef TDC1000_ConfigAutozeroPeriod(TDC1000_Name *AFE, auto_zero_peri
 	return TDC1000_WriteRegister(AFE, CLOCK_RATE, AFE->clockrate_reg | AUTOZERO_PERIOD);
 }
 
-HAL_StatusTypeDef TDC1000_Get_Error(TDC1000_Name* AFE)
+HAL_StatusTypeDef TDC1000_Get_Error(TDC1000_Name* AFE, uint8_t *error_reg_value)
 {
-	uint8_t reg_value;
+	HAL_StatusTypeDef status = TDC1000_ReadRegister(AFE, ERROR_FLAGS, error_reg_value);
 
-	HAL_StatusTypeDef status = TDC1000_ReadRegister(AFE, ERROR_FLAGS, &reg_value);
-
-	if (reg_value != 0)
+	if (*error_reg_value != 0)
 	{
-		if ((reg_value & 0x04) != 0)
+		if ((*error_reg_value & 0x04) != 0)
 		{
-			RS485_log_printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "The number of received was not enough");
+			printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "The number of received was not enough");
 		}
-		else if ((reg_value & 0x02) != 0)
+		else if ((*error_reg_value & 0x02) != 0)
 		{
-			RS485_log_printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "No signals were received");
+			printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "No signals were received");
 		}
-		else if ((reg_value & 0x01) != 0)
+		else if ((*error_reg_value & 0x01) != 0)
 		{
-			RS485_log_printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "The received echo amplitude exceeds the largest echo qualification threshold");
+			printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "The received echo amplitude exceeds the largest echo qualification threshold");
 		}
 		else
-			RS485_log_printf("[INFO] TDC1000 no error\r\n");
+			printf("[WARN] %s:%d: %s: %d\r\n", __FILE__, __LINE__, "TDC1000 error", *error_reg_value);
 		TDC1000_WriteRegister(AFE, ERROR_FLAGS, 0x07);
+
 	}
+	else
+		printf("[INFO] %s:%d: %s\r\n", __FILE__, __LINE__, "TDC1000 no error");
 	return status;
 }
 
@@ -284,6 +286,7 @@ HAL_StatusTypeDef TDC1000_Temp_Select(TDC1000_Name* AFE)
 void TDC1000_Active(TDC1000_Name* AFE)
 {
 	HAL_GPIO_WritePin(AFE->EN_PORT, AFE->EN_PIN, GPIO_PIN_SET);
+	HAL_Delay(1);
 }
 
 void TDC1000_Sleep(TDC1000_Name* AFE)

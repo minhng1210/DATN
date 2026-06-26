@@ -62,8 +62,6 @@ void Error_Handler(void);
 #define NB_INT_Pin GPIO_PIN_3
 #define NB_INT_GPIO_Port GPIOC
 #define NB_INT_EXTI_IRQn EXTI3_IRQn
-#define BAT_CHECK_Pin GPIO_PIN_0
-#define BAT_CHECK_GPIO_Port GPIOA
 #define NB_RST_Pin GPIO_PIN_2
 #define NB_RST_GPIO_Port GPIOA
 #define AFE_CS_Pin GPIO_PIN_4

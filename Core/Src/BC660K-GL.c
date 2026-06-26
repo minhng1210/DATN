@@ -17,3 +17,9 @@ void BC660K_Init(BC660K_Name* NB, UART_HandleTypeDef* UART,
 	NB->RST_PORT = RST_PORT;
 	NB->RST_PIN = RST_PIN;
 }
+
+void BC660_SendCmd(BC660K_Name* NB, const char *cmd)
+{
+    HAL_UART_Transmit(NB->UART, (uint8_t*)cmd, sizeof(cmd), 1000);
+    HAL_Delay(200);
+}

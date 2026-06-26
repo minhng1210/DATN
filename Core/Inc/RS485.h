@@ -8,6 +8,8 @@
 #ifndef INC_RS485_H_
 #define INC_RS485_H_
 
+#define ENABLE_LOG   0
+
 #define HEADER 0xAA
 
 #include "stm32l4xx_hal.h"
@@ -18,8 +20,8 @@
 typedef enum
 {
 	READ_DATA_EPPROM = 1,
-	READ_DATA_DIRECT = 2,
-	READ_DATA_TOF = 3,
+	ENABLE_DATA_REALTIME = 2,
+	DISABLE_DATA_REALTIME = 3,
 	USE_CONFIG = 4,
 	SAVE_CONFIG = 5,
 }Command_Code;
@@ -44,8 +46,10 @@ void RS485_Disable(RS485_HandleTypeDef* rs);
 
 void RS485_SetUse(RS485_HandleTypeDef* rs);
 
+uint16_t CRC16(uint8_t *data, uint16_t length);
+
 HAL_StatusTypeDef RS485_log_printf(const char *fmt, ...);
 HAL_StatusTypeDef RS485_Transmit(uint8_t *buffer, uint16_t len);
-void RS485_TakeData(uint8_t *rxBuffer, uint8_t size,uint8_t *command_receive, uint8_t *data_receive, uint8_t *data_receive_lenght);
+uint8_t RS485_TakeData(uint8_t *rxBuffer, uint8_t size,uint8_t *command_receive, uint8_t *data_receive, uint8_t *data_receive_lenght);
 
 #endif /* INC_RS485_H_ */

@@ -118,10 +118,9 @@ void HT1621B_ReadData(HT1621B_Name* LCD, uint8_t address, uint8_t len)
 	HT1621B_SetDataOutput(LCD);
 }
 
-static void HT1621B_Clear(HT1621B_Name* LCD) {
-    for (uint8_t i = 0; i < 32; i++)
-    	LCD->RAM[i] = 0x00;
-    HT1621B_WriteData(LCD, 0, LCD->RAM, 32);
+static void HT1621B_Update(HT1621B_Name* LCD)
+{
+	HT1621B_WriteData(LCD, 0, &LCD->RAM[0], 32);
 }
 
 void HT1621B_Init(HT1621B_Name* LCD,
@@ -142,7 +141,7 @@ void HT1621B_Init(HT1621B_Name* LCD,
 	HAL_GPIO_WritePin(LCD->CS_PORT, LCD->CS_PIN, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(LCD->WR_PORT, LCD->WR_PIN, GPIO_PIN_SET);
 
-    HT1621B_Clear(LCD);
+	HT1621B_BDTM1174_WirteBlank(LCD);
 }
 
 void HT1621B_Active(HT1621B_Name* LCD)
@@ -173,6 +172,13 @@ void HT1621B_Config(HT1621B_Name* LCD)
 	HT1621B_WriteCmd(LCD, OSC_RC_256K);
 	HT1621B_WriteCmd(LCD, BIAS_1p3_4COM);
 }
+
+void HT1621B_BDTM1174_WirteBlank(HT1621B_Name* LCD)
+{
+	memset(LCD->RAM, 0, 32);
+	HT1621B_Update(LCD);
+}
+
 void HT1621B_BDTM1174_WirteData(HT1621B_Name* LCD, float value, unit_measure unit)
 {
 	uint8_t seg7_map[12][2] =
@@ -279,20 +285,65 @@ void HT1621B_BDTM1174_WirteData(HT1621B_Name* LCD, float value, unit_measure uni
 		}
 		dot_bit = 0x00;
 	}
-	RS485_log_printf("digit[8] = {%d, %d, %d, %d, %d, %d, %d, %d}\r\n",
-			digit[0], digit[1], digit[2], digit[3], digit[4], digit[5], digit[6], digit[7]);
+	//printf("[INFO] digit[8] = {%d, %d, %d, %d, %d, %d, %d, %d}\r\n", digit[0], digit[1], digit[2], digit[3], digit[4], digit[5], digit[6], digit[7]);
 	for (uint8_t i = 0; i < 8; i++)
 	{
 		LCD->RAM[2*i+1] = seg7_map[digit[i]][0];
-		LCD->RAM[2*i+2] = seg7_map[digit[i]][1];
+		LCD->RAM[2*i+2] = (LCD->RAM[2*i+2] & 0x01) | seg7_map[digit[i]][1];
 	}
 	LCD->RAM[10] = (LCD->RAM[10] & 0x0E) | dot_bit;
 	LCD->RAM[17] = unit;
-	HT1621B_WriteData(LCD, 1, &LCD->RAM[1], 17);
+	HT1621B_Update(LCD);
+}
+
+void HT1621B_BDTM1174_WirteError(HT1621B_Name* LCD, uint8_t error_reg_value)
+{
+	uint8_t error_map[12][2] =
+	{
+		{0b1111, 0b0100}, // E
+		{0b0111, 0b1110}, // R
+		{0b1111, 0b1010}, // O
+	};   //DEFA  //CGB
+	uint8_t seg7_map[12][2] =
+	{
+		{0b1111, 0b1010}, // 0
+		{0b0000, 0b1010}, // 1
+	};   //DEFA  //CGB
+
+	LCD->RAM[1] = error_map[0][0];
+	LCD->RAM[2] = (LCD->RAM[2] & 0x01) | error_map[0][1];
+	LCD->RAM[3] = error_map[1][0];
+	LCD->RAM[4] = (LCD->RAM[4] & 0x01) | error_map[1][1];
+	LCD->RAM[5] = error_map[1][0];
+	LCD->RAM[6] = (LCD->RAM[6] & 0x01) | error_map[1][1];
+	LCD->RAM[7] = error_map[2][0];
+	LCD->RAM[8] = (LCD->RAM[8] & 0x01) | error_map[2][1];
+	LCD->RAM[9] = error_map[1][0];
+	LCD->RAM[10] = (LCD->RAM[10] & 0x01) | error_map[1][1];
+
+	uint8_t digit[3] = {0};
+	digit[0] = (error_reg_value >> 2) & 0x01;
+	digit[1] = (error_reg_value >> 1) & 0x01;
+	digit[2] = error_reg_value & 0x01;
+
+	LCD->RAM[11] = seg7_map[digit[0]][0];
+	LCD->RAM[12] = (LCD->RAM[12] & 0x01) | seg7_map[digit[0]][1];
+	LCD->RAM[13] = seg7_map[digit[1]][0];
+	LCD->RAM[14] = (LCD->RAM[14] & 0x01) | seg7_map[digit[1]][1];
+	LCD->RAM[15] = seg7_map[digit[2]][0];
+	LCD->RAM[16] = (LCD->RAM[16] & 0x01) | seg7_map[digit[2]][1];
+
+	HT1621B_Update(LCD);
 }
 
 void HT1621B_BDTM1174_LowBattery(HT1621B_Name* LCD, status_symbol STATUS)
 {
 	LCD->RAM[12] = (LCD->RAM[12] & 0x0E) | STATUS;
 	HT1621B_WriteData(LCD, 12, &LCD->RAM[12], 1);
+}
+
+void HT1621B_BDTM1174_Test(HT1621B_Name* LCD, status_symbol STATUS)
+{
+	LCD->RAM[6] = (LCD->RAM[6] & 0x0E) | STATUS;
+	HT1621B_WriteData(LCD, 6, &LCD->RAM[6], 1);
 }

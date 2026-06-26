@@ -13,7 +13,7 @@
 ../Core/Src/TDC7200.c:133:19:TDC7200_Config_InterruptMask	16	static
 ../Core/Src/TDC7200.c:138:19:TDC7200_Config_CounterOverflow	32	static
 ../Core/Src/TDC7200.c:157:6:TDC7200_Active	16	static
-../Core/Src/TDC7200.c:162:6:TDC7200_Sleep	16	static
-../Core/Src/TDC7200.c:167:19:TDC7200_GetStatus	24	static
-../Core/Src/TDC7200.c:189:19:TDC7200_Startmeasing	24	static
-../Core/Src/TDC7200.c:205:19:TDC7200_GetTOF	224	static
+../Core/Src/TDC7200.c:163:6:TDC7200_Sleep	16	static
+../Core/Src/TDC7200.c:168:19:TDC7200_GetStatus	24	static
+../Core/Src/TDC7200.c:190:19:TDC7200_Startmeasing	24	static
+../Core/Src/TDC7200.c:206:19:TDC7200_GetTOF	192	static

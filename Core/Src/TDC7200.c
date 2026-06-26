@@ -72,7 +72,7 @@ HAL_StatusTypeDef TDC7200_Config(TDC7200_Name* TDC,
 	TDC->coarse_cntr_ovf_h_reg = (uint8_t)(coarse_cntr_ovf >> 8);
 	TDC->coarse_cntr_ovf_l_reg = (uint8_t)(coarse_cntr_ovf);
 	TDC->clock_cntr_ovf_h_reg = (uint8_t)(clock_cntr_ovf >> 8);
-	TDC->clock_cntr_ovf_h_reg = (uint8_t)(clock_cntr_ovf);
+	TDC->clock_cntr_ovf_l_reg = (uint8_t)(clock_cntr_ovf);
 	TDC->clock_cntr_stop_mask_h_reg = (uint8_t)(clock_cntr_stop_mask >> 8);
 	TDC->clock_cntr_stop_mask_l_reg = (uint8_t)(clock_cntr_stop_mask);
 
@@ -157,6 +157,7 @@ HAL_StatusTypeDef TDC7200_Config_CounterOverflow(TDC7200_Name* TDC, uint16_t coa
 void TDC7200_Active(TDC7200_Name* TDC)
 {
 	HAL_GPIO_WritePin(TDC->EN_PORT, TDC->EN_PIN, GPIO_PIN_SET);
+	HAL_Delay(1);
 }
 
 void TDC7200_Sleep(TDC7200_Name* TDC)
@@ -172,15 +173,15 @@ HAL_StatusTypeDef TDC7200_GetStatus(TDC7200_Name* TDC)
 
 	if ((reg_value & 0x04) != 0)
 	{
-		RS485_log_printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "CLOCK Counter Overflow error\r\n");
+		printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "CLOCK Counter Overflow error");
 	}
 	if ((reg_value & 0x02) != 0)
 	{
-		RS485_log_printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "Coarse Counter Overflow error\r\n");
+		printf("[WARN] %s:%d: %s\r\n", __FILE__, __LINE__, "Coarse Counter Overflow error");
 	}
 	if ((reg_value & 0x01) != 0)
 	{
-		RS485_log_printf("[INFO] %s:%d: %s\r\n", __FILE__, __LINE__, "New Measurement has been completed\r\n");
+		printf("[INFO] %s:%d: %s\r\n", __FILE__, __LINE__, "New Measurement has been completed");
 	}
 	TDC7200_WriteRegister8bit(TDC, INT_MASK, 0x1F);
 	return status;
@@ -254,40 +255,37 @@ HAL_StatusTypeDef TDC7200_GetTOF(TDC7200_Name* TDC)
 			break;
 		default:
 			calibration2_period = 10.0f;
-			RS485_log_printf("[ERROR] Invalid CALIBRATION field: 0x%02X\r\n", calibration2_period);
+			printf("[ERROR] Invalid CALIBRATION field: 0x%02X\r\n", calibration2_period);
 			break;
 	}
 
 	float CLOCKperiod = TIMESCALE * 1.0f / (TDC->clock);
-	RS485_log_printf("CLOCKperiod = %f ps\r\n", CLOCKperiod);
+	//printf("[INFO] CLOCKperiod = %f ns\r\n", CLOCKperiod);
 	float calCount = (calibration_2 - calibration_1)/(calibration2_period - 1.0f);
-	RS485_log_printf("calibration_2 = %lu, calibration_1 = %lu,calibration2_period = %u, calCount = %f ps\r\n", calibration_2, calibration_1, calibration2_period, calCount);
+	//printf("[INFO] calibration_2 = %lu, calibration_1 = %lu,calibration2_period = %u, calCount = %f ns\r\n", calibration_2, calibration_1, calibration2_period, calCount);
 	float normLSB;
-	if (calCount != 0)
-		normLSB = CLOCKperiod / calCount;
-	else
-		normLSB = 55;
-	RS485_log_printf("normLSB = %f ps\r\n", normLSB);
+	normLSB = CLOCKperiod / calCount;
+	//printf("[INFO] normLSB = %f ns\r\n", normLSB);
 	if ((TDC->config1_reg & 0x02) == MEAS_SHORT_ToF)
 	{
-		RS485_log_printf("Short ToF mode\r\n");
+		//printf("[INFO] Short ToF mode\r\n");
 		for (uint8_t i = 0; i < 5; i++)
 		{
 			TDC->ToF[i] = tim_value[i] * normLSB;
-			RS485_log_printf("TIM %d = %d, ToF %d = %f ps\r\n", i, tim_value[i], i, TDC->ToF[i]);
+			//printf("[INFO] TIM %d = %lu, ToF %d = %f ns\r\n", i, tim_value[i], i, TDC->ToF[i]);
 		}
 	}
 	if ((TDC->config1_reg & 0x02) == MEAS_LONG_ToF)
 	{
-		RS485_log_printf("Long ToF mode\r\n");
+		//printf("[INFO] Long ToF mode\r\n");
 		uint8_t avg_cycles = TDC->config2_reg & 0x38;
-		RS485_log_printf("AVERAGING field: 0x%02X\r\n", avg_cycles);
+		//printf("[INFO] AVERAGING field: 0x%02X\r\n", avg_cycles);
 
 		for (uint8_t i = 0; i < 5; i++)
 		{
 			float delta_time = ((float)tim_value[0] - (float)tim_value[i + 1]) * normLSB;
 			TDC->ToF[i] = delta_time + (float)(clock_count_value[i] >> avg_cycles) * CLOCKperiod;
-			RS485_log_printf("TIM %d = %u, CLOCK_COUNT %d = %lu, ToF %d = %f ps\r\n", i, tim_value[i], i, clock_count_value[i], i, TDC->ToF[i]);
+			//printf("[INFO] TIM %d = %lu, CLOCK_COUNT %d = %lu, ToF %d = %f ns\r\n", i, tim_value[i], i, clock_count_value[i], i, TDC->ToF[i]);
 		}
 	}
 	return status;

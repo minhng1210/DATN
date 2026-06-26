@@ -53,5 +53,5 @@ HAL_StatusTypeDef AT24C64_Write(AT24C64_Name* EPPROM, uint16_t mem_addr, uint8_t
 HAL_StatusTypeDef AT24C64_Read(AT24C64_Name* EPPROM, uint16_t mem_addr, uint8_t *pData, uint16_t size)
 {
     return HAL_I2C_Mem_Read(EPPROM->I2C, EPPROM->ADDRESS, mem_addr,
-                            I2C_MEMADD_SIZE_16BIT, pData, size, 100);
+                            I2C_MEMADD_SIZE_16BIT, pData, size, 1000);
 }

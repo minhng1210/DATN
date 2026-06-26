@@ -23,4 +23,5 @@ void BC660K_Init(BC660K_Name* NB, UART_HandleTypeDef* UART,
 		GPIO_TypeDef* PSM_PORT, uint16_t PSM_PIN,
 		GPIO_TypeDef* RST_PORT, uint16_t RST_PIN);
 
+void BC660_SendCmd(BC660K_Name* NB, const char *cmd);
 #endif /* INC_BC660K_GL_H_ */

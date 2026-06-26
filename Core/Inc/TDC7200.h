@@ -8,7 +8,7 @@
 #ifndef INC_TDC7200_H_
 #define INC_TDC7200_H_
 
-#define TIMESCALE 1000000000000 //ps
+#define TIMESCALE 1000000000 //ns
 
 #include "stm32l4xx_hal.h"
 
@@ -103,7 +103,7 @@ typedef enum
 	COARSE_CNTR_OVF_MASK_DIS = 0x00 << 1,
 	COARSE_CNTR_OVF_MASK_EN = 0x01 << 1,
 	NEW_MEAS_MASK_DIS = 0x00 << 0,
-	NEW_MEAS_MASK_EN = 0x01 << 1,
+	NEW_MEAS_MASK_EN = 0x01 << 0,
 }interrupt_mask;
 
 typedef struct
