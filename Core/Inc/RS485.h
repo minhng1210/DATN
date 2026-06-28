@@ -48,7 +48,7 @@ void RS485_SetUse(RS485_HandleTypeDef* rs);
 
 uint16_t CRC16(uint8_t *data, uint16_t length);
 
-HAL_StatusTypeDef RS485_log_printf(const char *fmt, ...);
+HAL_StatusTypeDef RS485_printf(const char *fmt, ...);
 HAL_StatusTypeDef RS485_Transmit(uint8_t *buffer, uint16_t len);
 uint8_t RS485_TakeData(uint8_t *rxBuffer, uint8_t size,uint8_t *command_receive, uint8_t *data_receive, uint8_t *data_receive_lenght);
 

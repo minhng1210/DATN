@@ -71,7 +71,7 @@
 
 #endif
 
-#define K_METER					0.4826814f
+#define K_METER					0.754189f
 
 #define ACK						0x06
 
@@ -80,7 +80,7 @@
 #define MIN_CYCLE_WRITE_EPPROM	((LIFE_CYCLE * 31536) / NUM_RECORD) //LIFE_CYCLE * 365 * 24 * 60 * 60 * 1000 / NUM_RECORD / 1000000 ms -> 1752 ms
 
 #define L_AB					0.060f //m
-#define PIPE_DIA				0.015f //m
+#define PIPE_DIA				0.012f //m
 #define PI						3.1415927f
 
 #define CRYSTAL_CLOCK			8000000 //Hz
@@ -167,7 +167,7 @@ float temperature = 0; // C
 float velocity = 0; // m/s
 float flow = 0; // l/s
 
-uint16_t water_used_writte = 0; //l
+uint16_t water_used_integer = 0; //l
 float water_used_reality = 0; //l
 
 uint32_t meter_reading_integer = 0; //l
@@ -231,28 +231,6 @@ void Init()
 	if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK)
 	{
 	    printf("[ERROR] ADC Calibration failed!\r\n");
-	}
-}
-
-void Read_saved_value()
-{
-	uint8_t write_position_epprom = 0;
-	AT24C64_Read(&EPPROM1, 24, &write_position_epprom, 1);
-	uint8_t packet_temp[13] = {0};
-	AT24C64_Read(&EPPROM1, 13 * write_position_epprom + 25, packet_temp, 13);
-
-	HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
-	HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
-
-	if (sDate.Date == packet_temp[2] && sDate.Month == packet_temp[3] && sDate.Year == packet_temp[4] && sTime.Hours / 4 == packet_temp[0] / 4 )
-	{
-		write_position = write_position_epprom;
-		memcpy(&packet_temp[5], &water_used_writte, 2);
-		memcpy(&packet_temp[7], &meter_reading_integer, 4);
-	}
-	else
-	{
-		write_position = write_position_epprom++;
 	}
 }
 
@@ -490,6 +468,10 @@ void Calculator_WaterUsed()
 	meter_reading_decimal += flow * (meas_cycle / 1000.0f);
 	meter_reading_integer += (uint32_t)meter_reading_decimal;
 	meter_reading_decimal -= (uint32_t)meter_reading_decimal;
+
+	water_used_integer = meter_reading_integer;
+	water_used_reality = meter_reading_integer;
+
 	printf("[INFO] Difference time = %f ns, Ultrasonic velocity = %f m/s, Velocity = %f m/s, Flow %f l/s, Water used = %f l\r\n",
 			delta_tof, c, velocity, flow, (float)meter_reading_integer + meter_reading_decimal);
 }
@@ -522,18 +504,6 @@ void Save_Data()
 	HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
 	HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
 
-	static uint8_t prev_hour = 255;
-
-	if (sTime.Hours != prev_hour)
-	{
-	    prev_hour = sTime.Hours;
-
-	    if (sTime.Hours % 4 == 0)
-	    {
-	        write_position++;
-	    }
-	}
-
 	if (updatedata_counter > MIN_CYCLE_WRITE_EPPROM)
 	{
 		updatedata_counter = 0;
@@ -545,6 +515,7 @@ void Save_Data()
 		data_write[2] = sDate.Date;			//date
 		data_write[3] = sDate.Month;		//mon
 		data_write[4] = sDate.Year;			//year
+		memcpy(&data_write[5], &water_used_integer, 2);
 		memcpy(&data_write[7], &meter_reading_integer, 4);
 		uint16_t crc = CRC16((uint8_t*)data_write, 11);
 		memcpy(&data_write[11], &crc, 2);
@@ -554,6 +525,19 @@ void Save_Data()
 	}
 	else
 		updatedata_counter += meas_cycle;
+
+	static uint8_t prev_hour = 255;
+
+	if (sTime.Hours != prev_hour)
+	{
+	    prev_hour = sTime.Hours;
+
+	    if (sTime.Hours % 4 == 0)
+	    {
+	        write_position++;
+	        water_used_integer = 0;
+	    }
+	}
 }
 
 void Send_DataEpprom()
@@ -611,6 +595,31 @@ void Save_Config()
 	AT24C64_Read(&EPPROM1, 0, cmd_temp, 23);
 	RS485_Transmit((uint8_t*)cmd_temp, 23);
 }
+
+void Read_saved_value()
+{
+	uint8_t write_position_epprom = 0;
+	AT24C64_Read(&EPPROM1, 24, &write_position_epprom, 1);
+	uint8_t packet_temp[13] = {0};
+	AT24C64_Read(&EPPROM1, 13 * write_position_epprom + 25, packet_temp, 13);
+
+	HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN);
+	HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN);
+
+	if (sDate.Date == packet_temp[2] && sDate.Month == packet_temp[3] && sDate.Year == packet_temp[4] && sTime.Hours / 4 == packet_temp[0] / 4 )
+	{
+		write_position = write_position_epprom;
+		memcpy(&packet_temp[5], &water_used_integer, 2);
+		memcpy(&packet_temp[7], &meter_reading_integer, 4);
+	}
+	else
+	{
+		write_position = write_position_epprom++;
+		memcpy(&packet_temp[7], &meter_reading_integer, 4);
+		Save_Data();
+	}
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -666,7 +675,7 @@ int main(void)
 
 
   isWakeUpFromStop = 0;
-  //Read_saved_value();
+  Read_saved_value();
   uint32_t start = 0, end = 0, stop = 0, timeMeasure = 0, timeUse = 0, timeSleep = 0;
   while (1)
   {
@@ -680,7 +689,7 @@ int main(void)
 	  Calculator_WaterUsed();
 	  MeasBattery();
 	  Update_LCD();
-	  //Save_Data();
+	  Save_Data();
 	  end = HAL_GetTick();
 	  timeMeasure = end - start;
 	  if (uart_int_flag)
